@@ -1,0 +1,9 @@
+.gitconfig
+
+.tmux.conf
+
+.aliases
+.zshrc
+
+!ohmyzsh
+!vim

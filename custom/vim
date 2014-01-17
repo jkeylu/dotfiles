@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+[[ -d ~/.vim/.git ]] && exit 0
+
+[[ -d ~/.vim ]] && mv ~/.vim ~/.vim.bak
+[[ -f ~/.vimrc || -L ~/.vimrc ]] && mv ~/.vimrc ~/.vimrc.bak
+
+git clone https://github.com/jkeylu/vim.x.git ~/.vim
+. ~/.vim/vimx

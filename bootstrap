@@ -1,0 +1,198 @@
+#!/usr/bin/env bash
+
+# {{{1
+__ScriptVersion="0.1"
+DOTFILES="dotfiles"
+ACTION=""
+DOTFILES_PATH=$(cd `dirname $0`; pwd)
+CUSTOM_PATH="$DOTFILES_PATH/custom"
+
+# {{{1 install_dotfiles
+function install_dotfiles() {
+  cat $DOTFILES | while read line
+  do
+    [ -z $line ] && continue
+
+    if [ ${line:0:1} = "!" ]; then
+      . "$CUSTOM_PATH/${line:1}" -i
+      echo ". $CUSTOM_PATH/${line:1} -i"
+
+    elif [ ${line:0-1:1} = "/" ]; then
+      cp -R "$DOTFILES_PATH/$line" $HOME
+      echo "cp -R $DOTFILES_PATH/$line $HOME"
+
+    else
+      cp "$DOTFILES_PATH/$line" $HOME
+      echo "cp $DOTFILES_PATH/$line $HOME"
+    fi
+  done
+}
+
+# {{{1 update_dotfiles
+function update_dotfiles() {
+  cat $DOTFILES | while read line
+  do
+    [ -z $line ] && continue
+
+    if [ ${line:0:1} = "!" ]; then
+      . "$CUSTOM_PATH/${line:1}" -u
+      echo ". $CUSTOM_PATH/${line:1} -u"
+
+    elif [ ${line:0-1:1} = "/" ]; then
+      if [ -d "$HOME/$line" ]; then
+        mv "$HOME/$line" "$HOME/$line.bak"
+        echo "mv $HOME/$line $HOME/$line.bak"
+      fi
+
+      cp -R "$DOTFILES_PATH/$line" $HOME
+      echo "cp -R $DOTFILES_PATH/$line $HOME"
+
+    else
+      if [ -f "$HOME/$line" ]; then
+        mv "$HOME/$line" "$HOME/$line.bak"
+        echo "mv $HOME/$line $HOME/$line.bak"
+      fi
+
+      cp "$DOTFILES_PATH/$line" $HOME
+      echo "cp $DOTFILES_PATH/$line $HOME"
+
+    fi
+  done
+}
+
+# {{{1 add_dotfiles
+function add_dotfiles() {
+  cat $DOTFILES | while read line
+  do
+    [ -z $line ] && continue
+    [ ${line:0:1} = "!" ] && continue
+
+    if [ ${line:0-1:1} = "/" ]; then
+      if [ -d "$HOME/$line" ]; then
+        cp -R "$HOME/$line" $DOTFILES_PATH
+        echo "cp -R $HOME/$line $DOTFILES_PATH"
+      fi
+
+    else
+      if [ -f "$HOME/$line" ]; then
+        cp "$HOME/$line" $DOTFILES_PATH
+        echo "cp $HOME/$line $DOTFILES_PATH"
+      fi
+
+    fi
+  done
+}
+
+# {{{1 clear_dotfiles
+function clean_dotfiles() {
+  for name in `ls -a $DOTFILES_PATH`
+  do
+    [[ $name = "." || $name = ".." ]] && continue
+    [[ $name = ".git" || $name = ".gitignore" ]] && continue
+    [[ $name = "bootstrap" || $name = "dotfiles" || $name = "README.md" || $name = "LICENSE" ]] && continue
+
+    if [ -d "$DOTFILES_PATH/$name" ]; then
+      exists=0
+      while read line
+      do
+        [ -z $line ] && continue
+
+        if [[ ${line:0-1:1} = "/" && $name = ${line:0:-1} ]]; then
+          exists=1
+          break
+        fi
+      done <$DOTFILES
+
+      if [ $exists = 0 ]; then
+        rm -rf "$DOTFILES_PATH/$name"
+        echo "rm -rf $DOTFILES_PATH/$name"
+      fi
+
+    else
+      exists=0
+      while read line
+      do
+        [ -z $line ] && continue
+
+        if [[ ${line:0-1:1} != "/" && $name = $line ]]; then
+          exists=1
+          break
+        fi
+      done <$DOTFILES
+
+      if [ $exists = 0 ]; then
+        rm -rf "$DOTFILES_PATH/$name"
+        echo "rm -rf $DOTFILES_PATH/$name"
+      fi
+
+    fi
+  done
+}
+
+# {{{1 usage
+function usage () {
+cat <<- EOT
+
+  Usage :  $0 [options] [--]
+
+  Options:
+  -a        Add dot files
+  -i        Install dot files
+  -u        Update dot files
+  -c        Clean Repository
+  -h        Display this message
+  -v        Display script version
+
+EOT
+}
+
+# {{{1 Handle command line arguments
+
+if [ $# = 0 ]; then
+  usage
+  exit 0
+fi
+
+while getopts "achiuv" opt
+do
+  case $opt in
+    a)
+      ACTION="ADD"
+      ;;
+    c)
+      ACTION="CLEAN"
+      ;;
+    i)
+      ACTION="INSTALL"
+      ;;
+    u)
+      ACTION="UPDATE"
+      ;;
+
+    h)
+      usage
+      exit 0
+      ;;
+    v)
+      echo "$0 -- Version $__ScriptVersion"
+      exit 0
+      ;;
+    ?)
+      usage
+      exit 1
+      ;;
+  esac
+done
+shift $(($OPTIND-1))
+
+
+if [ $ACTION = "ADD" ]; then
+  add_dotfiles
+elif [ $ACTION = "INSTALL" ]; then
+  install_dotfiles
+elif [ $ACTION = "UPDATE" ]; then
+  update_dotfiles
+elif [ $ACTION = "CLEAN" ]; then
+  clean_dotfiles
+fi
+
