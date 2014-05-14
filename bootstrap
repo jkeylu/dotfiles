@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # {{{1
-__ScriptVersion="0.1"
+__ScriptVersion="0.2"
 DOTFILES="dotfiles"
 ACTION=""
 DOTFILES_PATH=$(cd `dirname $0`; pwd)
@@ -12,6 +12,11 @@ function install_dotfiles() {
   cat $DOTFILES | while read line
   do
     [ -z $line ] && continue
+
+    if [ -f "$HOME/.dotfiles.exclude" ] \
+      && cat $HOME/.dotfiles.exclude | grep -q $line; then
+      continue
+    fi
 
     if [ ${line:0:1} = "!" ]; then
       . "$CUSTOM_PATH/${line:1}" -i
@@ -33,6 +38,11 @@ function update_dotfiles() {
   cat $DOTFILES | while read line
   do
     [ -z $line ] && continue
+
+    if [ -f "$HOME/.dotfiles.exclude" ] \
+      && cat $HOME/.dotfiles.exclude | grep -q $line; then
+      continue
+    fi
 
     if [ ${line:0:1} = "!" ]; then
       . "$CUSTOM_PATH/${line:1}" -u
@@ -65,6 +75,12 @@ function add_dotfiles() {
   cat $DOTFILES | while read line
   do
     [ -z $line ] && continue
+
+    if [ -f "$HOME/.dotfiles.exclude" ] \
+      && cat $HOME/.dotfiles.exclude | grep -q $line; then
+      continue
+    fi
+
     [ ${line:0:1} = "!" ] && continue
 
     if [ ${line:0-1:1} = "/" ]; then
@@ -83,7 +99,7 @@ function add_dotfiles() {
   done
 }
 
-# {{{1 clear_dotfiles
+# {{{1 clean_dotfiles
 function clean_dotfiles() {
   for name in `ls -a $DOTFILES_PATH`
   do
