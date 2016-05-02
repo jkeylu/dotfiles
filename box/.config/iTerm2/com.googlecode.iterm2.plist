@@ -937,7 +937,7 @@
 		</dict>
 	</dict>
 	<key>PrefsCustomFolder</key>
-	<string>/Users/luhuan/.dotfiles/box/.config/iTerm2</string>
+	<string>/Users/luhuan/.config/iTerm2</string>
 	<key>Print In Black And White</key>
 	<true/>
 	<key>PromptOnQuit</key>
