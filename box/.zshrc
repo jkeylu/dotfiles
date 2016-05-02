@@ -12,10 +12,6 @@ else
   ZSH_THEME="gentoo"
 fi
 
-# Example aliases
-# alias zshconfig="mate ~/.zshrc"
-# alias ohmyzsh="mate ~/.oh-my-zsh"
-
 # Uncomment the following line to use case-sensitive completion.
 # CASE_SENSITIVE="true"
 
@@ -97,25 +93,19 @@ fi
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
-
-# disable CTRL-D to close window
-
-set -o ignoreeof
-
-# aliases
-[[ -f ~/.aliases ]] && . ~/.aliases
-
-# exports
-[[ -f ~/.exports ]] && . ~/.exports
+[[ -f ~/.shell_alias ]] && . ~/.shell_alias
 
 # shell functions
-[[ -f ~/.shell_functions ]] && . ~/.shell_functions
+[[ -f ~/.shell_function ]] && . ~/.shell_function
+
+# disable CTRL-D to close window
+set -o ignoreeof
 
 # vimx
 [[ -r ~/.vim/vimx.sh ]] && . ~/.vim/vimx.sh
 
 # nvm
-export NVM_DIR="/Users/luhuan/.nvm"
+export NVM_DIR=$HOME/.nvm
 export NVM_NODEJS_ORG_MIRROR=http://npm.taobao.org/mirrors/node
 [[ -s $NVM_DIR/nvm.sh ]] && . $NVM_DIR/nvm.sh  # This loads nvm
 [[ -r $NVM_DIR/bash_completion ]] && . $NVM_DIR/bash_completion
@@ -124,7 +114,7 @@ export NVM_NODEJS_ORG_MIRROR=http://npm.taobao.org/mirrors/node
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # go
-export GOPATH="/Users/luhuan/Projects/gocode"
+export GOPATH=$HOME/Projects/gocode
 export PATH=$GOPATH/bin:$PATH
 
 # electron

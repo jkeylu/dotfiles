@@ -1,10 +1,13 @@
-@git|.gitconfig
+# shell
+.zshrc
+.shell_alias
+.shell_function
 
-@tmux|.tmux.conf
+# git
+.gitconfig
 
-.aliases
+# tmux
+.tmux.conf
 
-!ohmyzsh
-@zsh|.zshrc
-
-!vim
+# item2
+.config/iTerm2/
