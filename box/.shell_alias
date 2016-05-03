@@ -14,7 +14,7 @@ alias v="vim --cmd \"let g:custom_env = ['zmlearn']\""
 alias nv="nvim --cmd \"let g:custom_env = ['zmlearn']\""
 
 # thefuck
-eval "$(thefuck --alias)"
+[[ -e /usr/local/bin/thefuck ]] && eval "$(thefuck --alias)"
 
 # proxy
 alias all_proxy="ALL_PROXY=socks5://127.0.0.1:1080"
