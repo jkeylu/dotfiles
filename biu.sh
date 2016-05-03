@@ -85,6 +85,16 @@ function restore() {
   done < $dotfiles
 }
 
+function run_custom() {
+  local script="${__dir}/custom/${1}.sh"
+
+  if [[ -f "$script" ]]; then
+    bash "$script"
+  else
+    echo "script \"$script\" not found!"
+  fi
+}
+
 while :; do
   [[ -z "$1" ]] && break;
 
@@ -99,6 +109,10 @@ while :; do
       ;;
     -r|--restore)
       restore
+      exit 0
+      ;;
+    -c|--custom)
+      run_custom "$2"
       exit 0
       ;;
     *)
