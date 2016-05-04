@@ -5,8 +5,7 @@ export ZSH=$HOME/.oh-my-zsh
 # Look in ~/.oh-my-zsh/themes/
 # Optionally, if you set this to "random", it'll load a random theme each
 # time that oh-my-zsh is loaded.
-MY_SYSTEM=`uname -s`
-if [ $MY_SYSTEM = "Darwin" ]; then
+if [[ $(uname -s) = "Darwin" ]]; then
   ZSH_THEME="robbyrussell"
 else
   ZSH_THEME="gentoo"
@@ -111,7 +110,7 @@ export NVM_NODEJS_ORG_MIRROR=http://npm.taobao.org/mirrors/node
 [[ -r $NVM_DIR/bash_completion ]] && . $NVM_DIR/bash_completion
 
 # fzf
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+[[ -f ~/.fzf.zsh ]] && source ~/.fzf.zsh
 
 # go
 export GOPATH=$HOME/Projects/gocode

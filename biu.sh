@@ -18,20 +18,20 @@ function show_usage() {
 
 function link_file() {
   local name="$1"
-  if [[ "/" = "${name:0-1:1}" ]]; then
+  if [[ "/" = ${name:0-1:1} ]]; then
     name="${name%?}"
   fi
 
   local source_file="$__dir/box/$name"
   local link_name="$HOME/$name"
 
-  if [[ -L "$link_name" ]]; then
-    if [[ "$(readlink "$link_name")" = "$source_file" ]]; then
+  if [[ -L $link_name ]]; then
+    if [[ $(readlink "$link_name") = $source_file ]]; then
       return
     fi
   fi
 
-  if [[ -e "$link_name" ]]; then
+  if [[ -e $link_name ]]; then
     log backup "$link_name"
     mv "$link_name" "$backup_dir"
   fi
@@ -42,8 +42,8 @@ function link_file() {
 
 function install() {
   while read line; do
-    [[ -z "$line" ]] && continue
-    [[ "#" = "${line:0:1}" ]] && continue
+    [[ -z $line ]] && continue
+    [[ "#" = ${line:0:1} ]] && continue
 
     link_file "$line"
   done < $dotfiles
@@ -51,7 +51,7 @@ function install() {
 
 function restore_file() {
   local name="$1"
-  if [[ "/" = "${name:0-1:1}" ]]; then
+  if [[ "/" = ${name:0-1:1} ]]; then
     name="${name%?}"
   fi
 
@@ -59,18 +59,18 @@ function restore_file() {
   local origin_file="$HOME/$name"
   local source_file="$__dir/box/$name"
 
-  if [[ ! -L "$origin_file" ]]; then
+  if [[ ! -L $origin_file ]]; then
     return
   fi
 
-  if [[ "$(readlink "$origin_file")" != "$source_file" ]]; then
+  if [[ $(readlink "$origin_file") != $source_file ]]; then
     return
   fi
 
   log rm -rf $origin_file
   rm -rf $origin_file
 
-  if [[ -e "$backup_file" ]]; then
+  if [[ -e $backup_file ]]; then
     log restore "$origin_file"
     mv "$backup_file" "$origin_file"
   fi
@@ -78,8 +78,8 @@ function restore_file() {
 
 function restore() {
   while read line; do
-    [[ -z "$line" ]] && continue
-    [[ "#" = "${line:0:1}" ]] && continue
+    [[ -z $line ]] && continue
+    [[ "#" = ${line:0:1} ]] && continue
 
     restore_file "$line"
   done < $dotfiles
@@ -96,7 +96,7 @@ function run_custom() {
 }
 
 while :; do
-  [[ -z "$1" ]] && break;
+  [[ -z $1 ]] && break;
 
   case "$1" in
     -h|--help)
