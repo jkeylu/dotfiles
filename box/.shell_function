@@ -1,70 +1,41 @@
 function code () { VSCODE_CWD="$PWD" open -n -b "com.microsoft.VSCode" --args $*; }
 
-chsss() {
-    if [[ -z "$1" ]]
-    then
-        echo "usage: \e[1;36mchsss \e[1;0m< config.json name in ~/.config/shadowsocks/config.*.json >""]]"
-        echo "       change shadowsocks server with one of the following configuration files "
-        ls -G -l ~/.config/shadowsocks/
-    else
-        rm -f ~/.config/shadowsocks/config.json
-        ln -s ~/.config/shadowsocks/config.$1.json ~/.config/shadowsocks/config.json
-
-        echo -e "unload homebrew.mxcl.shadowsocks-libev.plist"
-        launchctl unload ~/Library/LaunchAgents/homebrew.mxcl.shadowsocks-libev.plist
-        echo -e "load homebrew.mxcl.shadowsocks-libev.plist"
-        launchctl load ~/Library/LaunchAgents/homebrew.mxcl.shadowsocks-libev.plist
-
-        #killall ss-local
-        #sudo networksetup -setwebproxystate Wi-Fi off
-        #sudo networksetup -setsocksfirewallproxystate Wi-Fi off
-        #sudo networksetup -setautoproxystate Wi-Fi off
-        #echo -e "Wi-FI proxy has been turned off"
-        #sudo networksetup -setautoproxystate Wi-Fi on
-        #sudo networksetup -setautoproxyurl Wi-Fi http://localhost:8081/autoproxy.pac
-        #echo -e "Wi-Fi proxy has been set to auto.pac"
-
-        echo -e "Shadowsocks server has been switched to: "
-        ls -G -l ~/.config/shadowsocks/config.json
+function chtsc() {
+  if [[ -z "$1" ]]; then
+    echo "Usage: chtsc [1.5|1.6|1.7|1.8]"
+    echo "Current typescript version is: "
+    tsc -v
+  else
+    if [[ "$1" = '1.5' ]]; then
+        npm install -g typescript@1.5.3
+    elif [[ "$1" = "1.6" ]]; then
+        npm install -g typescript@1.6.2
+    elif [[ "$1" = "1.7" ]]; then
+        npm install -g typescript@1.7.5
+    elif [[ "$1" = "1.8" ]]; then
+        npm install -g typescript@1.8.0
     fi
-}
 
-chtsc() {
-    if [[ -z "$1" ]]; then
-        echo "Usage: chtsc [1.5|1.6|1.7|1.8]"
-        echo "Current typescript version is: "
-        tsc -v
-    else
-        if [[ "$1" = '1.5' ]]; then
-            npm install -g typescript@1.5.3
-        elif [[ "$1" = "1.6" ]]; then
-            npm install -g typescript@1.6.2
-        elif [[ "$1" = "1.7" ]]; then
-            npm install -g typescript@1.7.5
-        elif [[ "$1" = "1.8" ]]; then
-            npm install -g typescript@1.8.0
-        fi
-
-        echo -e "Typescript has been switched to: "
-        tsc -v
-    fi
+    echo -e "Typescript has been switched to: "
+    tsc -v
+  fi
 }
 
 # ngrok
 # http://natapp.cn/
-comeback() {
-    local port=$1
-    local subdomain="comeback"
+function comeback() {
+  local port="$1"
+  local subdomain="$2"
 
-    if [[ -z "$1" ]]; then
-        port="80"
-    fi
+  if [[ -z $port ]]; then
+    port="80"
+  fi
 
-    if [[ -n "$2" ]]; then
-        subdomain=$2
-    fi
+  if [[ -z $subdomain ]]; then
+    subdomain="comeback"
+  fi
 
-    ~/.bin/ngrok -config ~/.bin/ngrok.cfg -subdomain $subdomain $port
+  ~/.bin/ngrok -config ~/.bin/ngrok.cfg -subdomain $subdomain $port
 }
 
 # vim:ft=sh et ts=4 sw=4 sts=4

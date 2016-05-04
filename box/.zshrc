@@ -92,22 +92,22 @@ fi
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
-[[ -f ~/.shell_alias ]] && . ~/.shell_alias
+[[ -f ~/.shell_alias ]] && source ~/.shell_alias
 
 # shell functions
-[[ -f ~/.shell_function ]] && . ~/.shell_function
+[[ -f ~/.shell_function ]] && source ~/.shell_function
 
 # disable CTRL-D to close window
 set -o ignoreeof
 
 # vimx
-[[ -r ~/.vim/vimx.sh ]] && . ~/.vim/vimx.sh
+[[ -r ~/.vim/vimx.sh ]] && source ~/.vim/vimx.sh
 
 # nvm
 export NVM_DIR=$HOME/.nvm
 export NVM_NODEJS_ORG_MIRROR=http://npm.taobao.org/mirrors/node
-[[ -s $NVM_DIR/nvm.sh ]] && . $NVM_DIR/nvm.sh  # This loads nvm
-[[ -r $NVM_DIR/bash_completion ]] && . $NVM_DIR/bash_completion
+[[ -s $NVM_DIR/nvm.sh ]] && source $NVM_DIR/nvm.sh  # This loads nvm
+[[ -r $NVM_DIR/bash_completion ]] && source $NVM_DIR/bash_completion
 
 # fzf
 [[ -f ~/.fzf.zsh ]] && source ~/.fzf.zsh
@@ -118,3 +118,6 @@ export PATH=$GOPATH/bin:$PATH
 
 # electron
 export ELECTRON_MIRROR=http://npm.taobao.org/mirrors/electron/
+
+# shadowsocks function chss
+[[ -f ~/.config/shadowsocks/chss.sh ]] && source ~/.config/shadowsocks/chss.sh

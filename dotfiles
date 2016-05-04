@@ -1,4 +1,4 @@
-# shell
+# zsh
 .zshrc
 .shell_alias
 .shell_function
@@ -11,3 +11,6 @@
 
 # item2
 .config/iTerm2/
+
+# shadowsocks
+.config/shadowsocks/
