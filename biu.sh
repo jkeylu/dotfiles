@@ -17,8 +17,11 @@ function show_usage() {
 
 function link_file() {
   local name="$1"
+  local bak_dir="$backup_dir"
   if [[ "/" = ${name:0-1:1} ]]; then
     name="${name%?}"
+    bak_dir="$bak_dir/$name"
+    bak_dir="${bak_dir%/*}"
   fi
 
   local source_file="$__dir/box/$name"
@@ -31,8 +34,10 @@ function link_file() {
   fi
 
   if [[ -e $link_name ]]; then
+    [[ -d $bak_dir ]] || mkdir -p "$bak_dir"
+
     log backup "$link_name"
-    mv "$link_name" "$backup_dir"
+    mv "$link_name" "$bak_dir"
   fi
 
   log ln -s "$source_file" "$link_name"
