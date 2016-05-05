@@ -3,6 +3,9 @@
 .shell_alias
 .shell_function
 
+# fzf
+.fzf.zsh
+
 # git
 .gitconfig
 
