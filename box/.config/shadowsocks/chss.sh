@@ -7,7 +7,7 @@ function chss() {
   local config="$HOME/.config/shadowsocks/$name.config.json"
 
   if [[ -z $name ]]; then
-    echo "usage: \e[1;36mchsss \e[1;0m< config.json name in ~/.config/shadowsocks/*.config.json >""]]"
+    echo "usage: \e[1;36mchss \e[1;0m config.json name in ~/.config/shadowsocks/*.config.json >"
     echo "       change shadowsocks server with one of the following configuration files "
     ls -G -l ~/.config/shadowsocks/*.json
 
