@@ -38,4 +38,4 @@ function comeback() {
   ~/.bin/ngrok -config ~/.bin/ngrok.cfg -subdomain $subdomain $port
 }
 
-# vim:ft=sh et ts=4 sw=4 sts=4
+# vim:ft=sh et ts=2 sw=2 sts=2
