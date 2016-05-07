@@ -5,7 +5,15 @@ source util.sh
 dotfiles="$__dir/dotfiles"
 
 function show_usage() {
-  echo "Hello world"
+  cat << EOF
+usage: ./biu.sh [option]
+
+option:
+  -i install dotfiles
+  -r restore dotfiles
+  -c run custom script
+  -h show this help message
+EOF
 }
 
 function install() {
@@ -35,6 +43,8 @@ function run_custom() {
     echo "script \"$script\" not found!"
   fi
 }
+
+[[ 0 = $# ]] && show_usage && exit 1
 
 while :; do
   [[ -z $1 ]] && break;
