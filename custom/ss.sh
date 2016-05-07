@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
 
-__dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-function log() {
-  echo "  ○ $@"
-}
+[[ -e util.sh ]] && source util.sh || source ../util.sh
 
 plist="$HOME/.config/shadowsocks/shadowsocks-libev.plist"
 launch_agents="$HOME/Library/LaunchAgents"
 plist_link="$launch_agents/shadowsocks-libev.plist"
 config="$HOME/.config/shadowsocks/config.json"
-log="$HOME/.config/shadowsocks/ss.log"
+log_file="$HOME/.config/shadowsocks/ss.log"
 
 if [[ $(uname) = "Darwin" ]]; then
   if ! command -v ss-local >/dev/null 2>&1; then
@@ -30,7 +27,7 @@ if [[ $(uname) = "Darwin" ]]; then
     log create "$plist"
     sed \
       -e "11s:/Users/luhuan/.config/shadowsocks/config.json:$config:" \
-      -e "19s:/Users/luhuan/.config/shadowsocks/ss.log:$log:" \
+      -e "19s:/Users/luhuan/.config/shadowsocks/ss.log:$log_file:" \
       "${plist}.sample" > "$plist"
   fi
 

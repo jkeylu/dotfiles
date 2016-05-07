@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
+[[ -e util.sh ]] && source util.sh || source ../util.sh
+
 if command -v brew >/dev/null 2>&1; then
-  echo "brew already installed"
+  log "brew already installed"
   exit 0
 fi
 

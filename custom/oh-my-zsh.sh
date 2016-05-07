@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
+[[ -e util.sh ]] && source util.sh || source ../util.sh
+
 if [[ -d ~/.oh-my-zsh ]]; then
-  echo "oh-my-zsh already installed"
+  log "oh-my-zsh already installed"
   exit 0
 fi
 

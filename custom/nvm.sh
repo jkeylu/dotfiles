@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
+[[ -e util.sh ]] && source util.sh || source ../util.sh
+
 if [[ -d ~/.nvm ]]; then
-  echo "nvm already installed"
+  log "nvm already installed"
   exit 0
 fi
 
