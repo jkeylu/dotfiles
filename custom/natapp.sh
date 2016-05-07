@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-[[ -e util.sh ]] && source util.sh || source ../util.sh
+[[ __util__ = 1 ]] || [[ -e util.sh ]] && source util.sh || source ../util.sh
 
 if [[ -e "$HOME/.bin/ngrok" ]]; then
   log $HOME/.bin/ngrok already exists

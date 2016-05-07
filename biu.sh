@@ -4,8 +4,6 @@ source util.sh
 
 dotfiles="$__dir/dotfiles"
 
-mkdir -p "$backup_dir"
-
 function show_usage() {
   echo "Hello world"
 }

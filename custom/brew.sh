@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-[[ -e util.sh ]] && source util.sh || source ../util.sh
+[[ __util__ = 1 ]] || [[ -e util.sh ]] && source util.sh || source ../util.sh
 
 if command -v brew >/dev/null 2>&1; then
   log "brew already installed"

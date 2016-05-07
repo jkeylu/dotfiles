@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-[[ -e util.sh ]] && source util.sh || source ../util.sh
+[[ __util__ = 1 ]] || [[ -e util.sh ]] && source util.sh || source ../util.sh
 
 plist="$HOME/.config/shadowsocks/shadowsocks-libev.plist"
 launch_agents="$HOME/Library/LaunchAgents"

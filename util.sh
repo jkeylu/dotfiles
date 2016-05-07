@@ -1,40 +1,54 @@
 #!/usr/bin/env bash
 
+__util__=1
 __dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-backup_dir="$HOME/.dotfiles.bak"
+
+root_bakup_dir="$HOME/.dotfiles.bak"
+[[ -d $root_bakup_dir ]] || mkdir "$root_bakup_dir"
 
 function log() {
   echo "  ○ $@"
 }
 
-function link_file() {
+function backup() {
   local name="$1"
-  local bak_dir="$backup_dir"
+  local source_file="$HOME/$name"
+  local backup_dir="$root_bakup_dir"
+
   if [[ "/" = ${name:0-1:1} ]]; then
     name="${name%?}"
-    bak_dir="$bak_dir/$name"
-    bak_dir="${bak_dir%/*}"
+    backup_dir="$backup_dir/$name"
+    backup_dir="${backup_dir%/*}"
   fi
 
-  local source_file="$__dir/box/$name"
+  if [[ -e $source_file ]]; then
+    [[ -d $backup_dir ]] || mkdir -p "$backup_dir"
+
+    log backup $source_file
+    mv "$source_file" "$backup_dir"
+  fi
+}
+
+function link_file() {
+  local name="$1"
+  if [[ "/" = ${name:0-1:1} ]]; then
+    name="${name%?}"
+  fi
+
+  local boxed_file="$__dir/box/$name"
   local link_name="$HOME/$name"
 
   if [[ -L $link_name ]]; then
-    if [[ $(readlink "$link_name") = $source_file ]]; then
-      log symbolic link $link_name already exists
+    if [[ $(readlink "$link_name") = $boxed_file ]]; then
+      log symbolic link $link_name already created
       return
     fi
   fi
 
-  if [[ -e $link_name ]]; then
-    [[ -d $bak_dir ]] || mkdir -p "$bak_dir"
+  backup $name
 
-    log backup "$link_name"
-    mv "$link_name" "$bak_dir"
-  fi
-
-  log ln -s "$source_file" "$link_name"
-  ln -s "$source_file" "$link_name"
+  log ln -s "$boxed_file" "$link_name"
+  ln -s "$boxed_file" "$link_name"
 }
 
 function restore_file() {
@@ -43,15 +57,15 @@ function restore_file() {
     name="${name%?}"
   fi
 
-  local backup_file="$backup_dir/$name"
+  local backup_file="$root_bakup_dir/$name"
   local origin_file="$HOME/$name"
-  local source_file="$__dir/box/$name"
+  local boxed_file="$__dir/box/$name"
 
   if [[ ! -L $origin_file ]]; then
     return
   fi
 
-  if [[ $(readlink "$origin_file") != $source_file ]]; then
+  if [[ $(readlink "$origin_file") != $boxed_file ]]; then
     return
   fi
 
