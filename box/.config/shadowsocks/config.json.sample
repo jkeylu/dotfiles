@@ -1,0 +1,8 @@
+{
+  "server": "ss.com",
+  "server_port": 10800,
+  "local_port": 1080,
+  "password": "password",
+  "timeout": 600,
+  "method": "rc4-md5"
+}

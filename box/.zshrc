@@ -5,19 +5,18 @@ export ZSH=$HOME/.oh-my-zsh
 # Look in ~/.oh-my-zsh/themes/
 # Optionally, if you set this to "random", it'll load a random theme each
 # time that oh-my-zsh is loaded.
-MY_SYSTEM=`uname -s`
-if [ $MY_SYSTEM = "Darwin" ]; then
+if [[ $(uname -s) = "Darwin" ]]; then
   ZSH_THEME="robbyrussell"
 else
   ZSH_THEME="gentoo"
 fi
 
-# Example aliases
-# alias zshconfig="mate ~/.zshrc"
-# alias ohmyzsh="mate ~/.oh-my-zsh"
-
 # Uncomment the following line to use case-sensitive completion.
 # CASE_SENSITIVE="true"
+
+# Uncomment the following line to use hyphen-insensitive completion. Case
+# sensitive completion must be off. _ and - will be interchangeable.
+# HYPHEN_INSENSITIVE="true"
 
 # Uncomment the following line to disable bi-weekly auto-update checks.
 # DISABLE_AUTO_UPDATE="true"
@@ -31,8 +30,8 @@ fi
 # Uncomment the following line to disable auto-setting terminal title.
 # DISABLE_AUTO_TITLE="true"
 
-# Uncomment the following line to disable command auto-correction.
-# DISABLE_CORRECTION="true"
+# Uncomment the following line to enable command auto-correction.
+# ENABLE_CORRECTION="true"
 
 # Uncomment the following line to display red dots whilst waiting for completion.
 # COMPLETION_WAITING_DOTS="true"
@@ -53,17 +52,19 @@ fi
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
-plugins=(git z sudo)
-
-source $ZSH/oh-my-zsh.sh
+# Add wisely, as too many plugins slow down shell startup.
+plugins=(git z sudo brew npm osx)
 
 # User configuration
 
 export PATH=$HOME/bin:/usr/local/bin:$PATH
 # export MANPATH="/usr/local/man:$MANPATH"
 
+source $ZSH/oh-my-zsh.sh
+
 # You may need to manually set your language environment
-export LANG=en_US.UTF-8
+# export LANG=en_US.UTF-8
+export LANG=zh_CN.UTF-8
 
 # Preferred editor for local and remote sessions
 # if [[ -n $SSH_CONNECTION ]]; then
@@ -83,5 +84,43 @@ fi
 # ssh
 # export SSH_KEY_PATH="~/.ssh/dsa_id"
 
-# aliases
-[[ -f ~/.aliases ]] && . ~/.aliases
+# Set personal aliases, overriding those provided by oh-my-zsh libs,
+# plugins, and themes. Aliases can be placed here, though oh-my-zsh
+# users are encouraged to define aliases within the ZSH_CUSTOM folder.
+# For a full list of active aliases, run `alias`.
+#
+# Example aliases
+# alias zshconfig="mate ~/.zshrc"
+# alias ohmyzsh="mate ~/.oh-my-zsh"
+[[ -f ~/.shell_alias ]] && source ~/.shell_alias
+
+# shell functions
+[[ -f ~/.shell_function ]] && source ~/.shell_function
+
+# disable CTRL-D to close window
+set -o ignoreeof
+
+# vimx
+[[ -r ~/.vim/vimx.sh ]] && source ~/.vim/vimx.sh
+
+# nvm
+export NVM_DIR=$HOME/.nvm
+export NVM_NODEJS_ORG_MIRROR=http://npm.taobao.org/mirrors/node
+[[ -s $NVM_DIR/nvm.sh ]] && source $NVM_DIR/nvm.sh  # This loads nvm
+[[ -r $NVM_DIR/bash_completion ]] && source $NVM_DIR/bash_completion
+
+# fzf
+[[ -f ~/.fzf.zsh ]] && source ~/.fzf.zsh
+
+# go
+export GOPATH=$HOME/Projects/gocode
+export PATH=$GOPATH/bin:$PATH
+
+# electron
+export ELECTRON_MIRROR=http://npm.taobao.org/mirrors/electron/
+
+# shadowsocks function chss
+[[ -f ~/.config/shadowsocks/chss.sh ]] && source ~/.config/shadowsocks/chss.sh
+
+
+# vim:ft=sh et ts=2 sw=2 sts=2

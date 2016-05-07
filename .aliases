@@ -1,4 +1,0 @@
-alias zshconfig="$EDITOR ~/.zshrc"
-alias myip="curl --silent ifconfig.me"
-
-[[ -f /var/log/syslog ]] && alias syslog="tail -f /var/log/syslog -n30"

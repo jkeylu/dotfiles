@@ -1,0 +1,41 @@
+function code () { VSCODE_CWD="$PWD" open -n -b "com.microsoft.VSCode" --args $*; }
+
+function chtsc() {
+  if [[ -z "$1" ]]; then
+    echo "Usage: chtsc [1.5|1.6|1.7|1.8]"
+    echo "Current typescript version is: "
+    tsc -v
+  else
+    if [[ "$1" = '1.5' ]]; then
+        npm install -g typescript@1.5.3
+    elif [[ "$1" = "1.6" ]]; then
+        npm install -g typescript@1.6.2
+    elif [[ "$1" = "1.7" ]]; then
+        npm install -g typescript@1.7.5
+    elif [[ "$1" = "1.8" ]]; then
+        npm install -g typescript@1.8.0
+    fi
+
+    echo -e "Typescript has been switched to: "
+    tsc -v
+  fi
+}
+
+# ngrok
+# http://natapp.cn/
+function comeback() {
+  local port="$1"
+  local subdomain="$2"
+
+  if [[ -z $port ]]; then
+    port="80"
+  fi
+
+  if [[ -z $subdomain ]]; then
+    subdomain="comeback"
+  fi
+
+  ~/.bin/ngrok -config ~/.bin/ngrok.cfg -subdomain $subdomain $port
+}
+
+# vim:ft=sh et ts=2 sw=2 sts=2

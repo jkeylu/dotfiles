@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-
-[ -d ~/.oh-my-zsh ] && exit 0
-
-git clone git://github.com/robbyrussell/oh-my-zsh.git ~/.oh-my-zsh
-chsh -s /bin/zsh

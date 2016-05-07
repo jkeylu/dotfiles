@@ -1,9 +1,19 @@
+# zsh
+.zshrc
+.shell_alias
+.shell_function
+
+# fzf
+.fzf.zsh
+
+# git
 .gitconfig
 
+# tmux
 .tmux.conf
 
-.aliases
-.zshrc
+# item2
+.config/iTerm2/
 
-!ohmyzsh
-!vim
+# shadowsocks
+.config/shadowsocks/
