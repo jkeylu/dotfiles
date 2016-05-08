@@ -1,6 +1,26 @@
 // Place your key bindings in this file to overwrite the defaults
 [
     {
+        "key": "ctrl+shift+b",
+        "command": "cursorLeftSelect",
+        "when": "editorTextFocus"
+    },
+    {
+        "key": "ctrl+shift+f",
+        "command": "cursorRightSelect",
+        "when": "editorTextFocus"
+    },
+    {
+        "key": "ctrl+shift+p",
+        "command": "cursorUpSelect",
+        "when": "editorTextFocus"
+    },
+    {
+        "key": "ctrl+shift+n",
+        "command": "cursorDownSelect",
+        "when": "editorTextFocus"
+    },
+    {
         "key": "cmd+r",
         "command": "workbench.action.tasks.runTask",
         "when": "editorTextFocus"

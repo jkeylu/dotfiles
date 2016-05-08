@@ -1,7 +1,7 @@
 // Place your settings in this file to overwrite the default settings
 {
     "editor.fontFamily": "Monaco",
+    "editor.rulers": [80],
     "editor.renderWhitespace": true,
-    "files.trimTrailingWhitespace": true,
-	// "typescript.tsdk": "/Users/luhuan/.nvm/versions/node/v0.12.9/lib/node_modules/typescript/lib"
+    "files.trimTrailingWhitespace": true
 }
