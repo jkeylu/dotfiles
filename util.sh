@@ -45,7 +45,7 @@ function link_file() {
     fi
   fi
 
-  backup $name
+  backup "$1"
 
   log ln -s "$boxed_file" "$link_name"
   ln -s "$boxed_file" "$link_name"
