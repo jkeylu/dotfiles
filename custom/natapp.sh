@@ -27,5 +27,5 @@ fi
 
 [[ -d "$HOME/.bin" ]] || mkdir -p "$HOME/.bin"
 log pouring $download_path
-unzip $download_path -d "$HOME/.bin"
+unzip "$download_path" -d "$HOME/.bin"
 chmod +x "$HOME/.bin/ngrok"

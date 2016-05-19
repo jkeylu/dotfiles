@@ -17,3 +17,6 @@
 
 # shadowsocks
 .config/shadowsocks/
+
+# hosp
+.config/hosp/

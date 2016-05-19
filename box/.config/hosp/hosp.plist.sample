@@ -3,19 +3,19 @@
 <plist version="1.0">
   <dict>
     <key>Label</key>
-    <string>shadowsocks-libev</string>
+    <string>hosp</string>
     <key>ProgramArguments</key>
     <array>
-      <string>/usr/local/opt/shadowsocks-libev/bin/ss-local</string>
-      <string>-c</string>
-      <string>/Users/luhuan/.config/shadowsocks/config.json</string>
-      <string>-v</string>
+      <string>/Users/luhuan/.bin/hosp</string>
+      <string>-w</string>
+      <string>/Users/luhuan/.config/hosp/whitelist.txt</string>
+      <string>-verbose</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>StandardErrorPath</key>
-    <string>/Users/luhuan/.config/shadowsocks/ss.log</string>
+    <string>/Users/luhuan/.config/hosp/hosp.log</string>
   </dict>
 </plist>
