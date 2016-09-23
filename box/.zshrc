@@ -93,9 +93,11 @@ fi
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 [[ -f ~/.shell_alias ]] && source ~/.shell_alias
+[[ -f ~/.shell_alias_private ]] && source ~/.shell_alias_private
 
 # shell functions
 [[ -f ~/.shell_function ]] && source ~/.shell_function
+[[ -f ~/.shell_function_private ]] && source ~/.shell_function_private
 
 # disable CTRL-D to close window
 set -o ignoreeof
