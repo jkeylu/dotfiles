@@ -6,6 +6,7 @@ if [[ $(uname) = "Darwin" ]]; then
   if ! command -v tmux > /dev/null 2>&1; then
     command -v brew > /dev/null 2>&1 || log "brew is not installed" && exit 1
     brew install tmux
+    brew install reattach-to-user-namespace
   fi
 
   if [[ ! -d "$HOME/.tmux/plugins/tpm" ]]; then
