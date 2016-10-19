@@ -112,7 +112,7 @@ export NVM_NODEJS_ORG_MIRROR=http://npm.taobao.org/mirrors/node
 [[ -r $NVM_DIR/bash_completion ]] && source $NVM_DIR/bash_completion
 
 # fzf
-[[ -f ~/.fzf.zsh ]] && source ~/.fzf.zsh
+[[ -f ~/.fzf.zsh ]] && source ~/.fzf.zsh >/dev/null 2>&1 || echo ".fzf.zsh is somthing wrong"
 
 # go
 export GOPATH=$HOME/Projects/gocode
