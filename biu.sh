@@ -1,28 +1,21 @@
 #!/usr/bin/env bash
 
-source util.sh
-
-dotfiles="$__dir/dotfiles"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/util.sh"
 
 function show_usage() {
   cat << EOF
-usage: ./biu.sh [option]
+usage: ./biu.sh [option] name
 
 option:
+  -l list all dotfiles that can be installed
   -i install dotfiles
   -r restore dotfiles
-  -c run custom script
   -h show this help message
 EOF
 }
 
-function install() {
-  while read line; do
-    [[ -z $line ]] && continue
-    [[ "#" = ${line:0:1} ]] && continue
-
-    link_file "$line"
-  done < $dotfiles
+function list() {
+  ls "$opener_dir"
 }
 
 function restore() {
@@ -34,8 +27,8 @@ function restore() {
   done < $dotfiles
 }
 
-function run_custom() {
-  local script="${__dir}/custom/${1}.sh"
+function install() {
+  local script="$opener_dir/${1}.sh"
 
   if [[ -f "$script" ]]; then
     bash "$script"
@@ -54,16 +47,16 @@ while :; do
       show_usage
       exit 0
       ;;
+    -l|--list)
+      list
+      exit 0
+      ;;
     -i|--install)
-      install
+      install "$2"
       exit 0
       ;;
     -r|--restore)
       restore
-      exit 0
-      ;;
-    -c|--custom)
-      run_custom "$2"
       exit 0
       ;;
     *)

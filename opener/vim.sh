@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-[[ __util__ = 1 ]] || [[ -e util.sh ]] && source util.sh || source ../util.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
 [[ -d ~/.vim/.git ]] && exit 0
 

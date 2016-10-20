@@ -1,4 +1,5 @@
 *.swp
 *.log
 *.plist
-box/Library/Application\ Support/Code/User/workspaceStorage/
+!com.googlecode.iterm2.plist
+bottle/Library/Application\ Support/Code/User/workspaceStorage/

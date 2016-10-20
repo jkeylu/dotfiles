@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 
-[[ __util__ = 1 ]] || [[ -e util.sh ]] && source util.sh || source ../util.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
-if command -v brew >/dev/null 2>&1; then
+if [[ $os != 'Darwin' ]]; then
+  log "os is not macOS"
+fi
+
+if command_exist brew; then
   log "brew already installed"
   exit 0
 fi

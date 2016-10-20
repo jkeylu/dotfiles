@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-[[ __util__ = 1 ]] || [[ -e util.sh ]] && source util.sh || source ../util.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
 plist="$HOME/.config/shadowsocks/shadowsocks-libev.plist"
 launch_agents="$HOME/Library/LaunchAgents"
@@ -9,8 +9,8 @@ config="$HOME/.config/shadowsocks/config.json"
 log_file="$HOME/.config/shadowsocks/ss.log"
 
 if [[ $(uname) = "Darwin" ]]; then
-  if ! command -v ss-local >/dev/null 2>&1; then
-    if ! command -v brew >/dev/null 2>&1; then
+  if ! command_exist ss-local; then
+    if ! command_exist brew; then
       log "brew is not installed"
       exit 1
     fi
