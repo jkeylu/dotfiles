@@ -12,3 +12,4 @@ if command_exist brew; then
 fi
 
 /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+

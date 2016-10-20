@@ -9,3 +9,4 @@ backup .vimrc
 
 git clone https://github.com/jkeylu/vim.x.git ~/.vim
 bash ~/.vim/install.sh
+

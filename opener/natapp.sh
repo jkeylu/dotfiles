@@ -29,3 +29,4 @@ fi
 log pouring $download_path
 unzip "$download_path" -d "$HOME/.bin"
 chmod +x "$HOME/.bin/ngrok"
+

@@ -8,7 +8,7 @@ plist_link="$launch_agents/shadowsocks-libev.plist"
 config="$HOME/.config/shadowsocks/config.json"
 log_file="$HOME/.config/shadowsocks/ss.log"
 
-link_file "$config_dir/shadowsocks/"
+link_file .config/shadowsocks/
 
 if [[ $os = "Darwin" ]]; then
   if ! command_exist ss-local; then
@@ -34,3 +34,4 @@ if [[ $os = "Darwin" ]]; then
     ln -s "$plist" "$plist_link"
   fi
 fi
+

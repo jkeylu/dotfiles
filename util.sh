@@ -8,8 +8,8 @@ opener_dir="$__dir/opener"
 config_dir="$__dir/.config"
 [[ -d $config_dir ]] || mkdir "$config_dir"
 
-bakup_dir="$HOME/.dotfiles.bak"
-[[ -d $bakup_dir ]] || mkdir "$bakup_dir"
+backup_dir="$HOME/.dotfiles.bak"
+[[ -d $backup_dir ]] || mkdir "$backup_dir"
 
 os=`uname`
 if [[ $os != 'Darwin' ]]; then
@@ -28,11 +28,13 @@ function command_exist() {
 function backup() {
   local name="$1"
   local source_file="$HOME/$name"
-  local bak_dir="$bakup_dir"
+  local dest_file="$backup_dir/$name"
+  local bak_dir="$backup_dir"
 
   if [[ "/" = ${name:0-1:1} ]]; then
-    name="${name%?}"
-    bak_dir="$bak_dir/$name"
+    source_file="${source_file%?}"
+    dest_file="${dest_file%?}"
+    bak_dir="$bak_dir/${name%?}"
     bak_dir="${bak_dir%/*}"
   fi
 
@@ -40,6 +42,7 @@ function backup() {
     [[ -d $bak_dir ]] || mkdir -p "$bak_dir"
 
     log backup $source_file
+    rm -rf "$dest_file"
     mv "$source_file" "$bak_dir"
   fi
 }
@@ -72,7 +75,7 @@ function restore_file() {
     name="${name%?}"
   fi
 
-  local bak_file="$bakup_dir/$name"
+  local bak_file="$backup_dir/$name"
   local origin_file="$HOME/$name"
   local bottle_file="$bottle_dir/$name"
 

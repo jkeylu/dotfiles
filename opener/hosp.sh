@@ -9,7 +9,7 @@ whitelist="$HOME/.config/hosp/whitelist.txt"
 log_file="$HOME/.config/hosp/hosp.log"
 bin_dir="$HOME/.bin"
 
-link_file "$config_dir/hosp/"
+link_file .config/hosp/
 
 if [[ -e "$bin_dir/hosp" ]]; then
   log $bin_dir/hosp already exists
@@ -49,3 +49,4 @@ else
   ln -s "$plist" "$plist_link"
   launchctl load "$plist_link"
 fi
+

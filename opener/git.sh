@@ -17,3 +17,4 @@ elif [[ $os_id = "debian" || $os_id_like = "debian" ]]; then
 elif [[ $os_id = "arch" || $os_id_like = "arch" ]]; then
   sudo pacman -S git
 fi
+

@@ -8,3 +8,4 @@ if [[ $os = "Darwin" ]]; then
   command_exist brew || log "brew is not installed" && exit 1
   brew install fzf
 fi
+

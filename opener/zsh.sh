@@ -31,3 +31,4 @@ if ! command_exist zsh; then
 fi
 
 chsh -s /bin/zsh
+
