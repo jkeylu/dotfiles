@@ -9,6 +9,8 @@ whitelist="$HOME/.config/hosp/whitelist.txt"
 log_file="$HOME/.config/hosp/hosp.log"
 bin_dir="$HOME/.bin"
 
+link_file "$config_dir/hosp/"
+
 if [[ -e "$bin_dir/hosp" ]]; then
   log $bin_dir/hosp already exists
   exit 0
@@ -27,11 +29,6 @@ fi
 log pouring $download_path
 tar zxvf "$download_path" -C "$bin_dir" || exit 1
 chmod +x "$bin_dir/hosp"
-
-if [[ ! -d "$HOME/.config/shadowsocks" ]]; then
-  log "$HOME/.config/shadowsocks" not found
-  log please run ./biu.sh -i
-fi
 
 if [[ ! -e $plist ]]; then
   log create "$plist"

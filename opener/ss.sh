@@ -8,19 +8,12 @@ plist_link="$launch_agents/shadowsocks-libev.plist"
 config="$HOME/.config/shadowsocks/config.json"
 log_file="$HOME/.config/shadowsocks/ss.log"
 
-if [[ $(uname) = "Darwin" ]]; then
+link_file "$config_dir/shadowsocks/"
+
+if [[ $os = "Darwin" ]]; then
   if ! command_exist ss-local; then
-    if ! command_exist brew; then
-      log "brew is not installed"
-      exit 1
-    fi
-
+    command_exist brew || log "brew is not installed" && exit 1
     brew install shadowsocks-libev
-  fi
-
-  if [[ ! -d "$HOME/.config/shadowsocks" ]]; then
-    log "$HOME/.config/shadowsocks" not found
-    log please run ./biu.sh -i
   fi
 
   if [[ ! -e $plist ]]; then
