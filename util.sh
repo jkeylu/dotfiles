@@ -36,7 +36,7 @@ function backup() {
     bak_dir="${bak_dir%/*}"
   fi
 
-  if [[ -e $source_file ]]; then
+  if [[ -e $source_file || -L $source_file ]]; then
     [[ -d $bak_dir ]] || mkdir -p "$bak_dir"
 
     log backup $source_file
