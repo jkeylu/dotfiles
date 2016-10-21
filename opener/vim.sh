@@ -13,7 +13,7 @@ function install() {
 }
 
 function install_lite() {
-  cat > ~/.vimrc <<EOF
+  cat > ~/.vimrc <<'EOF'
 let mapleader = ','
 colorscheme desert
 imap jj <Esc>`^
