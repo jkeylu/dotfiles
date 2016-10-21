@@ -17,6 +17,7 @@ function install() {
   if ! command_exist zsh; then
     if [[ $os = 'Darwin' ]]; then
       if command_exist brew; then
+        log brew install zsh
         brew install zsh
       else
         log "brew is not installed"
@@ -24,9 +25,11 @@ function install() {
       fi
 
     elif [[ $os_id = 'debian' || $os_id_like = 'debian' ]]; then
+      log sudo apt-get install zsh
       sudo apt-get install zsh
 
     elif [[ $os_id = 'arch' || $os_id_like = 'arch' ]]; then
+      log sudo pacman -S zsh
       sudo pacman -S zsh
     fi
   fi
