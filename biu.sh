@@ -19,19 +19,14 @@ function list() {
 }
 
 function restore() {
-  while read line; do
-    [[ -z $line ]] && continue
-    [[ "#" = ${line:0:1} ]] && continue
-
-    restore_file "$line"
-  done < $dotfiles
+  echo "Not implement" && exit 1
 }
 
 function install() {
   local script="$opener_dir/${1}.sh"
 
   if [[ -f "$script" ]]; then
-    bash "$script"
+    bash "$script" -i
   else
     echo "script \"$script\" not found!"
   fi

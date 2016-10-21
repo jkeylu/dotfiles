@@ -9,44 +9,48 @@ whitelist="$HOME/.config/hosp/whitelist.txt"
 log_file="$HOME/.config/hosp/hosp.log"
 bin_dir="$HOME/.bin"
 
-link_file .config/hosp/
+function install() {
+  link_file .config/hosp/
 
-if [[ -e "$bin_dir/hosp" ]]; then
-  log "$bin_dir/hosp already exists"
-  exit 0
-fi
+  if [[ -e "$bin_dir/hosp" ]]; then
+    log "$bin_dir/hosp already exists"
+    exit 0
+  fi
 
-url="https://github.com/jkeylu/hosp/releases/download/v1.1.0/hosp-macosx-amd64-v1.1.0.tar.gz"
-download_path="${TMPDIR}hosp.tar.gz"
-curl --location --output "$download_path" "$url"
+  url="https://github.com/jkeylu/hosp/releases/download/v1.1.0/hosp-macosx-amd64-v1.1.0.tar.gz"
+  download_path="${TMPDIR}hosp.tar.gz"
+  curl --location --output "$download_path" "$url"
 
-if [[ ! -f $download_path ]]; then
-  log "download $url failed"
-  exit 1
-fi
+  if [[ ! -f $download_path ]]; then
+    log "download $url failed"
+    exit 1
+  fi
 
-[[ -d "$bin_dir" ]] || mkdir -p "$bin_dir"
-log "pouring $download_path"
-tar zxvf "$download_path" -C "$bin_dir" || exit 1
-chmod +x "$bin_dir/hosp"
+  [[ -d "$bin_dir" ]] || mkdir -p "$bin_dir"
+  log "pouring $download_path"
+  tar zxvf "$download_path" -C "$bin_dir" || exit 1
+  chmod +x "$bin_dir/hosp"
 
-if [[ ! -e $plist ]]; then
-  log "create $plist"
-  sed \
-    -e "9s:/Users/luhuan/.bin/hosp:$bin_dir/hosp:" \
-    -e "11s:/Users/luhuan/.config/hosp/whitelist.txt:$whitelist:" \
-    -e "19s:/Users/luhuan/.config/hosp/hosp.log:$log_file:" \
-    "${plist}.sample" > "$plist"
-fi
+  if [[ ! -e $plist ]]; then
+    log "create $plist"
+    sed \
+      -e "9s:/Users/luhuan/.bin/hosp:$bin_dir/hosp:" \
+      -e "11s:/Users/luhuan/.config/hosp/whitelist.txt:$whitelist:" \
+      -e "19s:/Users/luhuan/.config/hosp/hosp.log:$log_file:" \
+      "${plist}.sample" > "$plist"
+  fi
 
-if [[ -e $plist_link ]]; then
-  log "$plist_link is already exists"
+  if [[ -e $plist_link ]]; then
+    log "$plist_link is already exists"
 
-else
-  [[ -d $launch_agents ]] || mkdir -p "$launch_agents"
+  else
+    [[ -d $launch_agents ]] || mkdir -p "$launch_agents"
 
-  log ln -s "$plist" "$plist_link"
-  ln -s "$plist" "$plist_link"
-  launchctl load "$plist_link"
-fi
+    log ln -s "$plist" "$plist_link"
+    ln -s "$plist" "$plist_link"
+    launchctl load "$plist_link"
+  fi
+}
+
+[[ 0 = $# || "-i" = $1 ]] && install && exit 0
 

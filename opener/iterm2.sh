@@ -2,5 +2,9 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
-link_file .config/iTerm2/
+function install() {
+  link_file .config/iTerm2/
+}
+
+[[ 0 = $# || "-i" = $1 ]] && install && exit 0
 
