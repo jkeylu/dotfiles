@@ -7,6 +7,7 @@ function show_usage() {
 usage: ./biu.sh [option] name
 
 option:
+  -c run script with custom args
   -l list all dotfiles that can be installed
   -i install dotfiles
   -r restore dotfiles
@@ -32,6 +33,16 @@ function install() {
   fi
 }
 
+function custom() {
+  local script="$opener_dir/${1}.sh"
+
+  if [[ -f "$script" ]]; then
+    bash "$script" "$2"
+  else
+    echo "script \"$script\" not found!"
+  fi
+}
+
 [[ 0 = $# ]] && show_usage && exit 1
 
 while :; do
@@ -40,6 +51,10 @@ while :; do
   case "$1" in
     -h|--help)
       show_usage
+      exit 0
+      ;;
+    -c)
+      custom "$2" "$3"
       exit 0
       ;;
     -l|--list)
