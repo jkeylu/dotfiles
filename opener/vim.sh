@@ -12,5 +12,16 @@ function install() {
   bash ~/.vim/install.sh
 }
 
+function install_lite() {
+  cat > ~/.vimrc <<EOF
+let mapleader = ','
+colorscheme desert
+imap jj <Esc>`^
+nmap <leader>nt :Explore<CR>
+nmap <leader>q :bd<CR>
+EOF
+}
+
 [[ 0 = $# || "-i" = $1 ]] && install && exit 0
+[[ "-l" = $1 ]] && install_lite && exit 0
 
