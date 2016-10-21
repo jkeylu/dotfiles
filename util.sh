@@ -5,7 +5,7 @@ __dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bottle_dir="$__dir/bottle"
 opener_dir="$__dir/opener"
 
-config_dir="$__dir/.config"
+config_dir="$HOME/.config"
 [[ -d $config_dir ]] || mkdir "$config_dir"
 
 backup_dir="$HOME/.dotfiles.bak"
