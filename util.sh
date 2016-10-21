@@ -8,6 +8,9 @@ opener_dir="$__dir/opener"
 config_dir="$HOME/.config"
 [[ -d $config_dir ]] || mkdir "$config_dir"
 
+cache_dir="$HOME/.cache"
+[[ -d $cache_dir ]] || mkdir "$cache_dir"
+
 backup_dir="$HOME/.dotfiles.bak"
 [[ -d $backup_dir ]] || mkdir "$backup_dir"
 
