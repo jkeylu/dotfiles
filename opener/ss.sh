@@ -17,7 +17,7 @@ if [[ $os = "Darwin" ]]; then
   fi
 
   if [[ ! -e $plist ]]; then
-    log create "$plist"
+    log "create $plist"
     sed \
       -e "11s:/Users/luhuan/.config/shadowsocks/config.json:$config:" \
       -e "19s:/Users/luhuan/.config/shadowsocks/ss.log:$log_file:" \
@@ -25,7 +25,7 @@ if [[ $os = "Darwin" ]]; then
   fi
 
   if [[ -e $plist_link ]]; then
-    log "$plist_link" is already exists
+    log "$plist_link is already exists"
 
   else
     [[ -d $launch_agents ]] || mkdir -p "$launch_agents"

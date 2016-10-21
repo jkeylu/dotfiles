@@ -12,7 +12,7 @@ bin_dir="$HOME/.bin"
 link_file .config/hosp/
 
 if [[ -e "$bin_dir/hosp" ]]; then
-  log $bin_dir/hosp already exists
+  log "$bin_dir/hosp already exists"
   exit 0
 fi
 
@@ -21,17 +21,17 @@ download_path="${TMPDIR}hosp.tar.gz"
 curl --location --output "$download_path" "$url"
 
 if [[ ! -f $download_path ]]; then
-  log download $url failed
+  log "download $url failed"
   exit 1
 fi
 
 [[ -d "$bin_dir" ]] || mkdir -p "$bin_dir"
-log pouring $download_path
+log "pouring $download_path"
 tar zxvf "$download_path" -C "$bin_dir" || exit 1
 chmod +x "$bin_dir/hosp"
 
 if [[ ! -e $plist ]]; then
-  log create "$plist"
+  log "create $plist"
   sed \
     -e "9s:/Users/luhuan/.bin/hosp:$bin_dir/hosp:" \
     -e "11s:/Users/luhuan/.config/hosp/whitelist.txt:$whitelist:" \
@@ -40,7 +40,7 @@ if [[ ! -e $plist ]]; then
 fi
 
 if [[ -e $plist_link ]]; then
-  log "$plist_link" is already exists
+  log "$plist_link is already exists"
 
 else
   [[ -d $launch_agents ]] || mkdir -p "$launch_agents"
