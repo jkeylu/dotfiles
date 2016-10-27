@@ -13,14 +13,7 @@ function install() {
 }
 
 function install_lite() {
-  cat > ~/.vimrc <<'EOF'
-let mapleader = ','
-colorscheme desert
-imap jj <Esc>`^
-nmap <leader>nt :Explore<CR>
-nmap <leader>q :q<CR>
-autocmd FileType netrw nmap q :bd<CR>
-EOF
+  link_file .vimrc
 }
 
 [[ 0 = $# || "-i" = $1 ]] && install && exit 0
