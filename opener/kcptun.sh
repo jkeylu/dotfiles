@@ -3,6 +3,11 @@
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
 function install() {
+  if [[ -e "$bin_dir/kcptun_client" ]]; then
+    log "kcptun already installed"
+    exit 0
+  fi
+
   log get latest version...
   local version="$(curl -is https://github.com/xtaci/kcptun/releases/latest | sed -n 's|^Location:.*/tag/v\([a-zA-Z0-9_-]*\).*$|\1|p')"
 
@@ -17,6 +22,9 @@ function install() {
   curl -L --output "$download_path" "$url"
 
   tar zxvf "$download_path" -C "$bin_dir"
+
+  mv "${bin_dir}/client_${name}_386" "${bin_dir}/kcptun_client"
+  mv "${bin_dir}/server_${name}_386" "${bin_dir}/kcptun_server"
 }
 
 [[ 0 = $# || "-i" = $1 ]] && install && exit 0
