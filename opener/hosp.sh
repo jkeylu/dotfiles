@@ -7,7 +7,6 @@ launch_agents="$HOME/Library/LaunchAgents"
 plist_link="$launch_agents/hosp.plist"
 whitelist="$HOME/.config/hosp/whitelist.txt"
 log_file="$HOME/.config/hosp/hosp.log"
-bin_dir="$HOME/.bin"
 
 function install() {
   link_file .config/hosp/
