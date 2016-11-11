@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+
+cache_dir="$HOME/.cache/shadowsocks"
+[[ -d $cache_dir ]] || mkdir "$cache_dir"
+
+config_dir="$HOME/.config/shadowsocks"
+config_file="$config_dir/config.json"
+conf=`cat "$config_file"`
+
+config_get() {
+    local key=$1
+    echo $(expr "$conf" : '.*"'$key'": \{0,\}"\{0,1\}\([^,"]*\)"\{0,1\}.*')
+}
+
+server_host=`config_get server`
+server_port=`config_get server_port`
+local_port=`config_get local_port`
+password=`config_get password`
+method=`config_get method`
+kcptun_server_port=`config_get kcptun_server_port`
+
+[[ -z $server_port ]] && server_port="34499"
+[[ -z $local_port ]] && local_port="1080"
+[[ -z $method ]] && method="rc4-md5"
+[[ -z $kcptun_server_port ]] && kcptun_server_port="24499"
+
+start() {
+    nohup kcptun-server -l ":$kcptun_server_port" \
+        -t "127.0.0.1:$server_port" \
+        --crypt none --mtu 1200 \
+        --mode normal --dscp 46 \
+        --nocomp &
+    echo -n $! > "$cache_dir/kcptun-server.pid"
+
+    nohup ss-server -s 0.0.0.0 -p "$server_port" \
+        -k "$password" -m "$method" -u &
+    echo -n $! > "$cache_dir/ss-server.pid"
+}
+
+get_comm_by_pid() {
+    local pid="$1"
+    echo -n `ps -p $pid -o comm | sed -n '2p'`
+}
+
+get_pid_by_comm() {
+    local comm="$1"
+    echo -n `px ax | grep $name | grep -v grep | awk '{ print $1 }'`
+}
+
+kill_process() {
+    local comm="$1"
+    local pid_file="$cache_dir/$comm.pid"
+    local pid=`cat "$pid_file"`
+
+    if [[ `get_comm_by_pid $pid` != $comm ]]; then
+        pid=`get_pid_by_comm $comm`
+    fi
+
+    if [[ -n $pid ]]; then
+        kill $pid
+    fi
+
+    rm "$pid_file"
+}
+
+stop() {
+    kill_process kcptun-server
+    kill_process ss-server
+}
+
+status() {
+    echo ''
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    status)
+        status
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|status}"
+esac
+

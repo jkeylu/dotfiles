@@ -23,8 +23,8 @@ function install() {
 
   tar zxvf "$download_path" -C "$bin_dir"
 
-  mv "${bin_dir}/client_${name}_386" "${bin_dir}/kcptun_client"
-  mv "${bin_dir}/server_${name}_386" "${bin_dir}/kcptun_server"
+  mv "${bin_dir}/client_${name}_386" "${bin_dir}/kcptun-client"
+  mv "${bin_dir}/server_${name}_386" "${bin_dir}/kcptun-server"
 }
 
 [[ 0 = $# || "-i" = $1 ]] && install && exit 0
