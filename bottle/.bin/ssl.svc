@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+KCPTUN="kcptun-client"
+SS="ss-local"
+
+_TMP_ARR_=()
+
 cache_dir="$HOME/.cache/shadowsocks"
 [[ -d $cache_dir ]] || mkdir "$cache_dir"
 
@@ -9,7 +14,7 @@ conf=`cat "$config_file"`
 
 config_get() {
     local key=$1
-    echo $(expr "$conf" : '.*"'$key'": \{0,\}"\{0,1\}\([^,"]*\)"\{0,1\}.*')
+    echo $(echo "$conf" | sed -n 's/.*"'$key'": *"\{0,1\}\([^,"]*\)"\{0,1\}.*/\1/p')
 }
 
 server_host=`config_get server`
@@ -18,59 +23,158 @@ local_port=`config_get local_port`
 password=`config_get password`
 method=`config_get method`
 kcptun_server_port=`config_get kcptun_server_port`
+over_kcptun=`config_get over_kcptun`
 
 [[ -z $server_port ]] && server_port="34499"
 [[ -z $local_port ]] && local_port="1080"
 [[ -z $method ]] && method="rc4-md5"
 [[ -z $kcptun_server_port ]] && kcptun_server_port="24499"
-
-start() {
-    nohup kcptun-client -l 127.0.0.1:12948 \
-        -r "$server_host:$kcptun_server_port" \
-        --crypt none --mtu 1200 \
-        --mode normal --dscp 46 \
-        --nocomp &> /dev/null &
-    echo -n $! > "$cache_dir/kcptun-client.pid"
-
-    nohup ss-local -s 127.0.0.1 -p 12948 \
-        -k "$password" -m "$method" \
-        -l "$local_port" -b 0.0.0.0 &> /dev/null &
-    echo -n $! > "$cache_dir/ss-local.pid"
-}
+[[ -z $over_kcptun ]] && over_kcptun="0"
 
 get_comm_by_pid() {
     local pid="$1"
     echo -n `ps -p $pid -o comm | sed -n '2p'`
 }
 
-get_pid_by_comm() {
+get_pids_by_comm() {
     local comm="$1"
-    echo -n `px ax | grep $name | grep -v grep | awk '{ print $1 }'`
+    _TMP_ARR_=(`ps ax | grep $comm | grep -v grep | awk '{ print $1 }'`)
+}
+
+array_contains() {
+    local seeking=$1; shift
+    local in=1
+    for element; do
+        if [[ $element == $seeking ]]; then
+            in=0
+            break
+        fi
+    done
+    return $in
+}
+
+is_running() {
+    local comm="$1"
+    local pid_file="$cache_dir/$comm.pid"
+    local pid=`cat $pid_file`
+
+    if [[ -n $pid ]]; then
+        if [[ `get_comm_by_pid $pid` = $comm ]]; then
+            return 0
+        fi
+
+        return 2
+    fi
+
+    return 1
+}
+
+start() {
+    if [[ $over_kcptun = "1" ]]; then
+        if [[ `is_running $KCPTUN` ]]; then
+            echo "$KCPTUN is already running"
+
+        else
+            echo "start $KCPTUN"
+            nohup $KCPTUN -l 127.0.0.1:12948 \
+                -r "$server_host:$kcptun_server_port" \
+                --crypt none --mtu 1200 \
+                --mode normal --dscp 46 \
+                --nocomp &> /dev/null &
+            echo -n $! > "$cache_dir/$KCPTUN.pid"
+        fi
+
+        if [[ `is_running $SS` ]]; then
+            echo "$SS is already running"
+
+        else
+            echo "start $SS"
+            nohup $SS -s 127.0.0.1 -p 12948 \
+                -k "$password" -m "$method" \
+                -l "$local_port" &> /dev/null &
+            echo -n $! > "$cache_dir/$SS.pid"
+        fi
+
+    else
+        if [[ `is_running $SS` ]]; then
+            echo "$SS is already running"
+
+        else
+            echo "start $SS"
+            nohup $SS -s "$server_host" -p "$server_port" \
+                -k "$password" -m "$method" \
+                -l "$local_port" &> /dev/null &
+            echo -n $! > "$cache_dir/$SS.pid"
+        fi
+    fi
 }
 
 kill_process() {
-    local comm="$1"
+    local comm=$1
     local pid_file="$cache_dir/$comm.pid"
-    local pid=`cat "$pid_file"`
 
-    if [[ `get_comm_by_pid $pid` != $comm ]]; then
-        pid=`get_pid_by_comm $comm`
+    echo "* try to kill $comm"
+    if [[ -f $pid_file ]]; then
+        local pid=`cat $pid_file`
+
+        if [[ -n $pid ]]; then
+
+            if [[ `get_comm_by_pid $pid` = $comm ]]; then
+                echo "kill $comm [$pid]"
+                kill $pid
+                return 0
+            else
+                echo "the process of pid [$pid] is not same as \"$comm\""
+            fi
+
+        else
+            echo "$comm.pid is empty"
+        fi
+
+    else
+        echo "$comm.pid not found"
     fi
 
-    if [[ -n $pid ]]; then
-        kill $pid
+    local similar=`ps ax | grep $comm | grep -v grep | awk '{$2=$3=$4="";print $0}'`
+    if [[ -n $similar ]]; then
+        echo the following process of \"$comm\" are similar
+        echo $similar
     fi
-
-    rm "$pid_file"
+    echo ""
 }
 
 stop() {
-    kill_process kcptun-client
-    kill_process ss-local
+    [[ $over_kcptun = "1" ]] && kill_process $KCPTUN
+
+    kill_process $SS
+}
+
+Y="\033[0;32mo\033[0m"
+N="\033[0;31mx\033[0m"
+
+get_status() {
+    local comm=$1
+    local pid_file="$cache_dir/$comm.pid"
+
+    local status=$N
+
+    if [[ -f $pid_file ]]; then
+        local pid=`cat $pid_file`
+        if [[ -n $pid  && `get_comm_by_pid $pid` = $comm ]]; then
+            status=$Y
+        fi
+    fi
+
+    echo $status
 }
 
 status() {
-    echo ''
+    local status=$N
+    if [[ $over_kcptun = "1" ]]; then
+        echo -e "over kcptun $Y"
+        echo -e "$KCPTUN `get_status $KCPTUN`"
+    fi
+    echo -e "$SS `get_status $SS`"
 }
 
 case "$1" in
