@@ -17,19 +17,32 @@ config_get() {
     echo $(echo "$conf" | sed -n 's/.*"'$key'": *"\{0,1\}\([^,"]*\)"\{0,1\}.*/\1/p')
 }
 
-server_host=`config_get server`
-server_port=`config_get server_port`
+ss_server_host=`config_get server`
+ss_server_port=`config_get server_port`
 local_port=`config_get local_port`
 password=`config_get password`
 method=`config_get method`
+kcptun_server_host=`config_get server`
 kcptun_server_port=`config_get kcptun_server_port`
 over_kcptun=`config_get over_kcptun`
 
-[[ -z $server_port ]] && server_port="34499"
+[[ -z $ss_server_port ]] && ss_server_port="34499"
 [[ -z $local_port ]] && local_port="1080"
 [[ -z $method ]] && method="rc4-md5"
 [[ -z $kcptun_server_port ]] && kcptun_server_port="24499"
 [[ -z $over_kcptun ]] && over_kcptun="0"
+
+if [[ $over_kcptun = "1" ]]; then
+    ss_server_host="127.0.0.1"
+    ss_server_port="12948"
+fi
+
+kcptun_log="/dev/null"
+ss_log="/dev/null"
+if [[ `config_get log` = "1" ]]; then
+    kcptun_log="$cache_dir/$KCPTUN.log"
+    ss_log="$cache_dir/$SS.log"
+fi
 
 get_comm_by_pid() {
     local pid="$1"
@@ -56,11 +69,16 @@ array_contains() {
 is_running() {
     local comm="$1"
     local pid_file="$cache_dir/$comm.pid"
-    local pid=`cat $pid_file`
 
-    if [[ -n $pid ]]; then
-        if [[ `get_comm_by_pid $pid` = $comm ]]; then
-            return 0
+    if [[ -f $pid_file ]]; then
+        local pid=`cat $pid_file`
+
+        if [[ -n $pid ]]; then
+            if [[ `get_comm_by_pid $pid` = $comm ]]; then
+                return 0
+            fi
+
+            return 3
         fi
 
         return 2
@@ -70,6 +88,28 @@ is_running() {
 }
 
 start() {
+    if [[ $# -gt 0 ]]; then
+        if [[ $1 = $KCPTUN ]]; then
+            [[ `is_running $KCPTUN` ]] && echo "$KCPTUN is already running" && exit 1
+            $KCPTUN -l 127.0.0.1:12948 \
+                -r "$kcptun_server_host:$kcptun_server_port" \
+                --crypt none --mtu 1200 \
+                --mode normal --dscp 46 \
+                --nocomp
+            return 0
+
+        elif [[ $1 = $SS ]]; then
+            [[ `is_running $SS` ]] && echo "$SS is already running" && exit 1
+            $SS -s "$ss_server_host" -p "$ss_server_port" \
+                -k "$password" -m "$method" \
+                -l "$local_port"
+            return 0
+
+        else
+            exit 1
+        fi
+    fi
+
     if [[ $over_kcptun = "1" ]]; then
         if [[ `is_running $KCPTUN` ]]; then
             echo "$KCPTUN is already running"
@@ -77,35 +117,23 @@ start() {
         else
             echo "start $KCPTUN"
             nohup $KCPTUN -l 127.0.0.1:12948 \
-                -r "$server_host:$kcptun_server_port" \
+                -r "$kcptun_server_host:$kcptun_server_port" \
                 --crypt none --mtu 1200 \
                 --mode normal --dscp 46 \
-                --nocomp &> /dev/null &
+                --nocomp &> "$kcptun_log" &
             echo -n $! > "$cache_dir/$KCPTUN.pid"
         fi
+    fi
 
-        if [[ `is_running $SS` ]]; then
-            echo "$SS is already running"
-
-        else
-            echo "start $SS"
-            nohup $SS -s 127.0.0.1 -p 12948 \
-                -k "$password" -m "$method" \
-                -l "$local_port" &> /dev/null &
-            echo -n $! > "$cache_dir/$SS.pid"
-        fi
+    if [[ `is_running $SS` ]]; then
+        echo "$SS is already running"
 
     else
-        if [[ `is_running $SS` ]]; then
-            echo "$SS is already running"
-
-        else
-            echo "start $SS"
-            nohup $SS -s "$server_host" -p "$server_port" \
-                -k "$password" -m "$method" \
-                -l "$local_port" &> /dev/null &
-            echo -n $! > "$cache_dir/$SS.pid"
-        fi
+        echo "start $SS"
+        nohup $SS -s "$ss_server_host" -p "$ss_server_port" \
+            -k "$password" -m "$method" \
+            -l "$local_port" &> "$ss_log" &
+        echo -n $! > "$cache_dir/$SS.pid"
     fi
 }
 
@@ -122,6 +150,7 @@ kill_process() {
             if [[ `get_comm_by_pid $pid` = $comm ]]; then
                 echo "kill $comm [$pid]"
                 kill $pid
+                rm -f "$pid_file"
                 return 0
             else
                 echo "the process of pid [$pid] is not same as \"$comm\""
@@ -147,6 +176,11 @@ stop() {
     [[ $over_kcptun = "1" ]] && kill_process $KCPTUN
 
     kill_process $SS
+}
+
+restart() {
+    stop
+    start
 }
 
 Y="\033[0;32mo\033[0m"
@@ -179,15 +213,19 @@ status() {
 
 case "$1" in
     start)
-        start
+        shift
+        start $@
         ;;
     stop)
         stop
+        ;;
+    restart)
+        restart
         ;;
     status)
         status
         ;;
     *)
-        echo "Usage: $0 {start|stop|status}"
+        echo "Usage: $0 {start|stop|restart|status}"
 esac
 
