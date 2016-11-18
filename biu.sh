@@ -2,7 +2,7 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/util.sh"
 
-function show_usage() {
+show_usage() {
   cat << EOF
 usage: ./biu.sh [option] name
 
@@ -15,16 +15,16 @@ option:
 EOF
 }
 
-function list() {
-  ls "$opener_dir"
+list() {
+  ls "$OPENER_DIR"
 }
 
-function restore() {
+restore() {
   echo "Not implement" && exit 1
 }
 
-function install() {
-  local script="$opener_dir/${1}.sh"
+install() {
+  local script="$OPENER_DIR/${1}.sh"
 
   if [[ -f "$script" ]]; then
     bash "$script" -i
@@ -33,46 +33,43 @@ function install() {
   fi
 }
 
-function custom() {
-  local script="$opener_dir/${1}.sh"
+custom() {
+  local script="$OPENER_DIR/${1}.sh"
 
   if [[ -f "$script" ]]; then
-    bash "$script" "$2"
+    shift
+    bash "$script" "$@"
   else
     echo "script \"$script\" not found!"
   fi
 }
 
-[[ 0 = $# ]] && show_usage && exit 1
+case "$1" in
+  -h|--help|h)
+    show_usage
+    exit 0
+    ;;
+  -c|c)
+    shift
+    custom "$@"
+    exit 0
+    ;;
+  -l|--list|l|list)
+    list
+    exit 0
+    ;;
+  -i|--install|i|install)
+    install "$2"
+    exit 0
+    ;;
+  -r|--restore|r|restore)
+    restore
+    exit 0
+    ;;
+  *)
+    echo -e "\033[31mERROR: unknown argument! \033[0m\n"
+    show_usage
+    exit 1
+    ;;
+esac
 
-while :; do
-  [[ -z $1 ]] && break;
-
-  case "$1" in
-    -h|--help)
-      show_usage
-      exit 0
-      ;;
-    -c)
-      custom "$2" "$3"
-      exit 0
-      ;;
-    -l|--list)
-      list
-      exit 0
-      ;;
-    -i|--install)
-      install "$2"
-      exit 0
-      ;;
-    -r|--restore)
-      restore
-      exit 0
-      ;;
-    *)
-      echo -e "\033[31mERROR: unknown argument! \033[0m\n"
-      show_usage
-      exit 1
-      ;;
-  esac
-done

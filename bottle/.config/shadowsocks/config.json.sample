@@ -1,8 +1,11 @@
 {
   "server": "ss.com",
-  "server_port": 10800,
+  "server_port": 34499,
   "local_port": 1080,
   "password": "password",
   "timeout": 600,
-  "method": "rc4-md5"
+  "method": "rc4-md5",
+  "kcptun_server_port": 24499,
+  "over_kcptun": 1,
+  "log": 0
 }

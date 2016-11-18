@@ -6,7 +6,7 @@ if [[ $os != 'Darwin' ]]; then
   os_id_like=`sed -n 's/^ID_LIKE=\(.*\)$/\1/p' /etc/os-release`
 fi
 
-function log() {
+log() {
   echo "  ○ $@"
 }
 

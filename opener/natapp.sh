@@ -2,9 +2,9 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
-function install() {
-  if [[ -e "$bin_dir/ngrok" ]]; then
-    log "$bin_dir/ngrok already exists"
+install() {
+  if [[ -e "$BIN_DIR/ngrok" ]]; then
+    log "$BIN_DIR/ngrok already exists"
     exit 0
   fi
 
@@ -27,9 +27,10 @@ function install() {
   fi
 
   log "pouring $download_path"
-  unzip "$download_path" -d "$bin_dir"
-  chmod +x "$bin_dir/ngrok"
+  unzip "$download_path" -d "$BIN_DIR"
+  chmod +x "$BIN_DIR/ngrok"
 }
 
-[[ 0 = $# || "-i" = $1 ]] && install && exit 0
+[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
+exit 1
 

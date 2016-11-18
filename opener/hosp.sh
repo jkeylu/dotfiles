@@ -8,11 +8,11 @@ plist_link="$launch_agents/hosp.plist"
 whitelist="$HOME/.config/hosp/whitelist.txt"
 log_file="$HOME/.config/hosp/hosp.log"
 
-function install() {
+install() {
   link_file .config/hosp/
 
-  if [[ -e "$bin_dir/hosp" ]]; then
-    log "$bin_dir/hosp already exists"
+  if [[ -e "$BIN_DIR/hosp" ]]; then
+    log "$BIN_DIR/hosp already exists"
     exit 0
   fi
 
@@ -25,15 +25,15 @@ function install() {
     exit 1
   fi
 
-  [[ -d "$bin_dir" ]] || mkdir -p "$bin_dir"
+  [[ -d "$BIN_DIR" ]] || mkdir -p "$BIN_DIR"
   log "pouring $download_path"
-  tar zxvf "$download_path" -C "$bin_dir" || exit 1
-  chmod +x "$bin_dir/hosp"
+  tar zxvf "$download_path" -C "$BIN_DIR" || exit 1
+  chmod +x "$BIN_DIR/hosp"
 
   if [[ ! -e $plist ]]; then
     log "create $plist"
     sed \
-      -e "9s:/Users/luhuan/.bin/hosp:$bin_dir/hosp:" \
+      -e "9s:/Users/luhuan/.bin/hosp:$BIN_DIR/hosp:" \
       -e "11s:/Users/luhuan/.config/hosp/whitelist.txt:$whitelist:" \
       -e "19s:/Users/luhuan/.config/hosp/hosp.log:$log_file:" \
       "${plist}.sample" > "$plist"
@@ -51,5 +51,6 @@ function install() {
   fi
 }
 
-[[ 0 = $# || "-i" = $1 ]] && install && exit 0
+[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
+exit 1
 

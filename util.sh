@@ -2,40 +2,40 @@
 
 __dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-bottle_dir="$__dir/bottle"
-opener_dir="$__dir/opener"
+BOTTLE_DIR="$__dir/bottle"
+OPENER_DIR="$__dir/opener"
 
-config_dir="$HOME/.config"
-[[ -d $config_dir ]] || mkdir "$config_dir"
+CONFIG_DIR="$HOME/.config"
+[[ -d $CONFIG_DIR ]] || mkdir "$CONFIG_DIR"
 
-bin_dir="$HOME/.bin"
-[[ -d $bin_dir ]] || mkdir "$bin_dir"
+BIN_DIR="$HOME/.bin"
+[[ -d $BIN_DIR ]] || mkdir "$BIN_DIR"
 
-cache_dir="$HOME/.cache"
-[[ -d $cache_dir ]] || mkdir "$cache_dir"
+CACHE_DIR="$HOME/.cache"
+[[ -d $CACHE_DIR ]] || mkdir "$CACHE_DIR"
 
-backup_dir="$HOME/.dotfiles.bak"
-[[ -d $backup_dir ]] || mkdir "$backup_dir"
+BACKUP_DIR="$HOME/.dotfiles.bak"
+[[ -d $BACKUP_DIR ]] || mkdir "$BACKUP_DIR"
 
-os=`uname`
-if [[ $os != 'Darwin' ]]; then
-  os_id=`sed -n 's/^ID=\(.*\)$/\1/p' /etc/os-release`
-  os_id_like=`sed -n 's/^ID_LIKE=\(.*\)$/\1/p' /etc/os-release`
+OS=`uname`
+if [[ $OS != 'Darwin' ]]; then
+  OS_ID=`sed -n 's/^ID=\(.*\)$/\1/p' /etc/os-release`
+  OS_ID_LIKE=`sed -n 's/^ID_LIKE=\(.*\)$/\1/p' /etc/os-release`
 fi
 
-function log() {
+log() {
   echo "  ○ $@"
 }
 
-function command_exist() {
+command_exist() {
   command -v "$1" &> /dev/null
 }
 
-function backup() {
+backup() {
   local name="$1"
   local source_file="$HOME/$name"
-  local dest_file="$backup_dir/$name"
-  local bak_dir="$backup_dir"
+  local dest_file="$BACKUP_DIR/$name"
+  local bak_dir="$BACKUP_DIR"
 
   if [[ "/" = ${name:0-1:1} ]]; then
     source_file="${source_file%?}"
@@ -53,13 +53,13 @@ function backup() {
   fi
 }
 
-function link_file() {
+link_file() {
   local name="$1"
   if [[ "/" = ${name:0-1:1} ]]; then
     name="${name%?}"
   fi
 
-  local bottle_file="$bottle_dir/$name"
+  local bottle_file="$BOTTLE_DIR/$name"
   local link_name="$HOME/$name"
 
   if [[ -L $link_name ]]; then
@@ -75,15 +75,15 @@ function link_file() {
   ln -s "$bottle_file" "$link_name"
 }
 
-function restore_file() {
+restore_file() {
   local name="$1"
   if [[ "/" = ${name:0-1:1} ]]; then
     name="${name%?}"
   fi
 
-  local bak_file="$backup_dir/$name"
+  local bak_file="$BACKUP_DIR/$name"
   local origin_file="$HOME/$name"
-  local bottle_file="$bottle_dir/$name"
+  local bottle_file="$BOTTLE_DIR/$name"
 
   if [[ ! -L $origin_file ]]; then
     return

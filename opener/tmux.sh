@@ -2,19 +2,19 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
-function install() {
+install() {
   link_file .tmux.conf
 
   if ! command_exist tmux; then
-    if [[ $os = "Darwin" ]]; then
+    if [[ $OS = "Darwin" ]]; then
       command_exist brew || log "brew is not installed" && exit 1
       brew install tmux
       brew install reattach-to-user-namespace
 
-    elif [[ $os_id = "debian" || $os_id_like = "debian" ]]; then
+    elif [[ $OS_ID = "debian" || $OS_ID_LIKE = "debian" ]]; then
       sudo apt-get install tmux
 
-    elif [[ $os_id = "arch" || $os_id_like = "arch" ]]; then
+    elif [[ $OS_ID = "arch" || $OS_ID_LIKE = "arch" ]]; then
       sudo pacman -S tmux
     fi
   fi
@@ -26,5 +26,6 @@ function install() {
   fi
 }
 
-[[ 0 = $# || "-i" = $1 ]] && install && exit 0
+[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
+exit 1
 

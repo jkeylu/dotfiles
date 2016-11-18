@@ -2,7 +2,7 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
-function install() {
+install() {
   link_file "Library/Application Support/Code/User/"
 
   if [[ ! -d "/Applications/Visual Studio Code.app" ]]; then
@@ -12,5 +12,6 @@ function install() {
   fi
 }
 
-[[ 0 = $# || "-i" = $1 ]] && install && exit 0
+[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
+exit 1
 

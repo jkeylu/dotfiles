@@ -2,8 +2,8 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
-function install() {
-  if [[ -e "$bin_dir/kcptun_client" ]]; then
+install() {
+  if [[ -e "$BIN_DIR/kcptun_client" ]]; then
     log "kcptun already installed"
     exit 0
   fi
@@ -13,7 +13,7 @@ function install() {
 
   log "version: $version"
 
-  local name="$(echo $os | tr '[:upper:]' '[:lower:]')"
+  local name="$(echo $OS | tr '[:upper:]' '[:lower:]')"
   local filename="kcptun-${name}-386-${version}.tar.gz"
   local url="https://github.com/xtaci/kcptun/releases/download/v${version}/${filename}"
   local download_path="${TMPDIR}${filename}"
@@ -21,10 +21,12 @@ function install() {
   log "download $url"
   curl -L --output "$download_path" "$url"
 
-  tar zxvf "$download_path" -C "$bin_dir"
+  tar zxvf "$download_path" -C "$BIN_DIR"
 
-  mv "${bin_dir}/client_${name}_386" "${bin_dir}/kcptun-client"
-  mv "${bin_dir}/server_${name}_386" "${bin_dir}/kcptun-server"
+  mv "${BIN_DIR}/client_${name}_386" "${BIN_DIR}/kcptun-client"
+  mv "${BIN_DIR}/server_${name}_386" "${BIN_DIR}/kcptun-server"
 }
 
-[[ 0 = $# || "-i" = $1 ]] && install && exit 0
+[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
+exit 1
+

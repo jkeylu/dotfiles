@@ -121,8 +121,5 @@ export PATH=$GOPATH/bin:$PATH
 # electron
 export ELECTRON_MIRROR=http://npm.taobao.org/mirrors/electron/
 
-# shadowsocks function chss
-[[ -f ~/.config/shadowsocks/chss.sh ]] && source ~/.config/shadowsocks/chss.sh
-
 
 # vim:ft=sh et ts=2 sw=2 sts=2

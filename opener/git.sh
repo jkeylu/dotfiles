@@ -2,22 +2,22 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
-function install() {
+install() {
   link_file .gitconfig
 
   if command_exist git; then
     exit 0
   fi
 
-  if [[ $os = "Darwin" ]]; then
+  if [[ $OS = "Darwin" ]]; then
     log xcode-select --install
     xcode-select --install
 
-  elif [[ $os_id = "debian" || $os_id_like = "debian" ]]; then
+  elif [[ $OS_ID = "debian" || $OS_ID_LIKE = "debian" ]]; then
     log sudo apt-get install git
     sudo apt-get install git
 
-  elif [[ $os_id = "arch" || $os_id_like = "arch" ]]; then
+  elif [[ $OS_ID = "arch" || $OS_ID_LIKE = "arch" ]]; then
     log sudo pacman -S git
     sudo pacman -S git
 
@@ -26,5 +26,6 @@ function install() {
   fi
 }
 
-[[ 0 = $# || "-i" = $1 ]] && install && exit 0
+[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
+exit 1
 

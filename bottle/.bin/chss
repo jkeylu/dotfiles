@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+
+CONFIG_DIR="$HOME/.config/shadowsocks"
+CONFIG_FILE="$CONFIG_DIR/config.json"
+
+config_get() {
+  local key=$1
+  echo $(cat "$CONFIG_FILE" | sed -n 's/.*"'$key'": *"\{0,1\}\([^,"]*\)"\{0,1\}.*/\1/p')
+}
+
+LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
+SS_PLIST="$LAUNCH_AGENTS/ss-local.plist"
+KCPTUN_PLIST="$LAUNCH_AGENTS/kcptun-client.plist"
+
+start() {
+  if [[ `config_get over_kcptun` = "1" ]]; then
+    echo load kcptun-client
+    launchctl load "$KCPTUN_PLIST"
+  fi
+
+  echo load ss-local
+  launchctl load "$SS_PLIST"
+}
+
+stop() {
+  if [[ -n $(launchctl list | grep ss-local) ]]; then
+    echo unload ss-local
+    launchctl unload "$SS_PLIST"
+  fi
+
+  if [[ -n $(launchctl list | grep kcptun-client) ]]; then
+    echo unload kcptun-client
+    launchctl unload "$KCPTUN_PLIST"
+  fi
+}
+
+restart() {
+  stop
+  start
+}
+
+status() {
+  echo ""
+}
+
+list() {
+  ls "$CONFIG_DIR/" | grep '\.config\.json'
+}
+
+change() {
+  local name="$1"
+  local config="$CONFIG_DIR/$name.config.json"
+  local config_link="$CONFIG_DIR/config.json"
+
+  if [[ -z $name || ! -f $config ]]; then
+    echo -e "\033[0;35mchange shadowsocks server with one of the following configuration files\033[0m"
+    list
+    exit 1
+  fi
+
+  rm -f "$config_link"
+  ln -s "$config" "$config_link"
+
+  restart
+
+  echo "Shadowsocks server has been switched to: "
+  ls -G -l "$config_link"
+}
+
+case "$1" in
+  start)
+    start
+    ;;
+  stop)
+    stop
+    ;;
+  s|st|status)
+    status
+    ;;
+  l|ls|list)
+    list
+    ;;
+  *)
+    if [[ -n $1 && -f "$CONFIG_DIR/$1.config.json" ]]; then
+      change "$1"
+      exit 0
+    fi
+
+    echo "Usage: $0 {start|stop|list|status|config-name}"
+    ;;
+esac
+

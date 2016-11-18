@@ -2,8 +2,8 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
-function install() {
-  if [[ $os != 'Darwin' ]]; then
+install() {
+  if [[ $OS != 'Darwin' ]]; then
     log "os is not macOS"
   fi
 
@@ -15,5 +15,6 @@ function install() {
   /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 }
 
-[[ 0 = $# || "-i" = $1 ]] && install && exit 0
+[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
+exit 1
 

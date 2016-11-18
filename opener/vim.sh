@@ -2,7 +2,7 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
-function install() {
+install() {
   [[ -d ~/.vim/.git ]] && exit 0
 
   backup .vim/
@@ -12,10 +12,11 @@ function install() {
   bash ~/.vim/install.sh
 }
 
-function install_lite() {
+install_lite() {
   link_file .vimrc
 }
 
-[[ 0 = $# || "-i" = $1 ]] && install && exit 0
-[[ "-l" = $1 ]] && install_lite && exit 0
+[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
+[[ "-l" = $1 || "l" = $1 ]] && install_lite && exit 0
+exit 1
 
