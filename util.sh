@@ -102,3 +102,11 @@ restore_file() {
   fi
 }
 
+init_work_dir() {
+  I_CONFIG_DIR="$CONFIG_DIR/$1"
+  I_CACHE_DIR="$CACHE_DIR/$1"
+
+  [[ -d $I_CONFIG_DIR ]] || mkdir "$I_CONFIG_DIR"
+  [[ -d $I_CACHE_DIR ]] || mkdir "$I_CACHE_DIR"
+}
+

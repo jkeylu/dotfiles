@@ -2,10 +2,12 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
+init_work_dir shadowsocks
+
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
-PLIST="$CONFIG_DIR/shadowsocks/ss-local.plist"
+PLIST="$I_CONFIG_DIR/ss-local.plist"
 PLIST_LINK="$LAUNCH_AGENTS/ss-local.plist"
-KCPTUN_PLIST="$CONFIG_DIR/shadowsocks/kcptun-client.plist"
+KCPTUN_PLIST="$I_CONFIG_DIR/kcptun-client.plist"
 KCPTUN_PLIST_LINK="$LAUNCH_AGENTS/kcptun-client.plist"
 
 install() {
@@ -50,9 +52,9 @@ install() {
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>${CACHE_DIR}/shadowsocks/kcptun-client.stdout</string>
+    <string>${I_CACHE_DIR}/kcptun-client.stdout</string>
     <key>StandardErrorPath</key>
-    <string>${CACHE_DIR}/shadowsocks/kcptun-client.stderr</string>
+    <string>${I_CACHE_DIR}/kcptun-client.stderr</string>
     </dict>
 </plist>
 EOF
@@ -83,9 +85,9 @@ EOF
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>${CACHE_DIR}/shadowsocks/ss-local.stdout</string>
+    <string>${I_CACHE_DIR}/ss-local.stdout</string>
     <key>StandardErrorPath</key>
-    <string>${CACHE_DIR}/shadowsocks/ss-local.stderr</string>
+    <string>${I_CACHE_DIR}/ss-local.stderr</string>
     </dict>
 </plist>
 EOF
@@ -93,8 +95,9 @@ EOF
 
     if [[ -e $KCPTUN_PLIST_LINK ]]; then
       log "$KCPTUN_PLIST_LINK is already exists"
-    else
+      echo -e "please run \033[0;32mlaunchctl load $KCPTUN_PLIST_LINK\033[0m"
 
+    else
       log ln -s "$KCPTUN_PLIST" "$KCPTUN_PLIST_LINK"
       ln -s "$KCPTUN_PLIST" "$KCPTUN_PLIST_LINK"
       echo -e "please run \033[0;32mlaunchctl load $KCPTUN_PLIST_LINK\033[0m"
@@ -102,12 +105,14 @@ EOF
 
     if [[ -e $PLIST_LINK ]]; then
       log "$PLIST_LINK is already exists"
+      echo -e "please run \033[0;32mlaunchctl load $PLIST_LINK\033[0m"
 
     else
       log ln -s "$PLIST" "$PLIST_LINK"
       ln -s "$PLIST" "$PLIST_LINK"
       echo -e "please run \033[0;32mlaunchctl load $PLIST_LINK\033[0m"
     fi
+
   fi
 }
 

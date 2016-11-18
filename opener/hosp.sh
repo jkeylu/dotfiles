@@ -2,19 +2,15 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
-HOSP_CONFIG_DIR="$CONFIG_DIR/hosp"
-HOSP_CACHE_DIR="$CACHE_DIR/hosp"
-
-[[ -d $HOSP_CONFIG_DIR ]] || mkdir "$HOSP_CONFIG_DIR"
-[[ -d $HOSP_CACHE_DIR ]] || mkdir "$HOSP_CACHE_DIR"
+init_work_dir hosp
 
 install() {
   link_file .config/hosp/
 
   local launch_agents="$HOME/Library/LaunchAgents"
-  local plist="$HOSP_CONFIG_DIR/hosp.plist"
+  local plist="$I_CONFIG_DIR/hosp.plist"
   local plist_link="$launch_agents/hosp.plist"
-  local whitelist="$HOSP_CONFIG_DIR/whitelist.txt"
+  local whitelist="$I_CONFIG_DIR/whitelist.txt"
   local url="https://github.com/jkeylu/hosp/releases/download/v1.1.0/hosp-macosx-amd64-v1.1.0.tar.gz"
   local download_path="${TMPDIR}hosp.tar.gz"
 
@@ -55,9 +51,9 @@ install() {
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>${HOSP_CACHE_DIR}/hosp.stdout</string>
+    <string>${I_CACHE_DIR}/hosp.stdout</string>
     <key>StandardErrorPath</key>
-    <string>${HOSP_CACHE_DIR}/hosp.stderr</string>
+    <string>${I_CACHE_DIR}/hosp.stderr</string>
   </dict>
 </plist>
 EOF
