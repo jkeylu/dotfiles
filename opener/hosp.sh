@@ -2,52 +2,77 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
-plist="$HOME/.config/hosp/hosp.plist"
-launch_agents="$HOME/Library/LaunchAgents"
-plist_link="$launch_agents/hosp.plist"
-whitelist="$HOME/.config/hosp/whitelist.txt"
-log_file="$HOME/.config/hosp/hosp.log"
+HOSP_CONFIG_DIR="$CONFIG_DIR/hosp"
+HOSP_CACHE_DIR="$CACHE_DIR/hosp"
+
+[[ -d $HOSP_CONFIG_DIR ]] || mkdir "$HOSP_CONFIG_DIR"
+[[ -d $HOSP_CACHE_DIR ]] || mkdir "$HOSP_CACHE_DIR"
 
 install() {
   link_file .config/hosp/
 
+  local launch_agents="$HOME/Library/LaunchAgents"
+  local plist="$HOSP_CONFIG_DIR/hosp.plist"
+  local plist_link="$launch_agents/hosp.plist"
+  local whitelist="$HOSP_CONFIG_DIR/whitelist.txt"
+  local url="https://github.com/jkeylu/hosp/releases/download/v1.1.0/hosp-macosx-amd64-v1.1.0.tar.gz"
+  local download_path="${TMPDIR}hosp.tar.gz"
+
   if [[ -e "$BIN_DIR/hosp" ]]; then
     log "$BIN_DIR/hosp already exists"
-    exit 0
+
+  else
+    curl --location --output "$download_path" "$url"
+
+    if [[ ! -f $download_path ]]; then
+      log "download $url failed"
+      exit 1
+    fi
+
+    log "pouring $download_path"
+    tar zxvf "$download_path" -C "$BIN_DIR" || exit 1
+    chmod +x "$BIN_DIR/hosp"
   fi
-
-  url="https://github.com/jkeylu/hosp/releases/download/v1.1.0/hosp-macosx-amd64-v1.1.0.tar.gz"
-  download_path="${TMPDIR}hosp.tar.gz"
-  curl --location --output "$download_path" "$url"
-
-  if [[ ! -f $download_path ]]; then
-    log "download $url failed"
-    exit 1
-  fi
-
-  [[ -d "$BIN_DIR" ]] || mkdir -p "$BIN_DIR"
-  log "pouring $download_path"
-  tar zxvf "$download_path" -C "$BIN_DIR" || exit 1
-  chmod +x "$BIN_DIR/hosp"
 
   if [[ ! -e $plist ]]; then
     log "create $plist"
-    sed \
-      -e "9s:/Users/luhuan/.bin/hosp:$BIN_DIR/hosp:" \
-      -e "11s:/Users/luhuan/.config/hosp/whitelist.txt:$whitelist:" \
-      -e "19s:/Users/luhuan/.config/hosp/hosp.log:$log_file:" \
-      "${plist}.sample" > "$plist"
+    cat > "$plist" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>lu.jkey.hosp</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>${BIN_DIR}/hosp</string>
+      <string>-w</string>
+      <string>${whitelist}</string>
+      <string>-verbose</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>${HOSP_CACHE_DIR}/hosp.stdout</string>
+    <key>StandardErrorPath</key>
+    <string>${HOSP_CACHE_DIR}/hosp.stderr</string>
+  </dict>
+</plist>
+EOF
   fi
 
   if [[ -e $plist_link ]]; then
     log "$plist_link is already exists"
+    echo -e " please run \033[0;32mlaunchctl load $plist_link\033[0m"
 
   else
     [[ -d $launch_agents ]] || mkdir -p "$launch_agents"
 
     log ln -s "$plist" "$plist_link"
     ln -s "$plist" "$plist_link"
-    launchctl load "$plist_link"
+    echo -e " please run \033[0;32mlaunchctl load $plist_link\033[0m"
   fi
 }
 
