@@ -3,147 +3,161 @@
 KCPTUN="kcptun-server"
 SS="ss-server"
 
-cache_dir="$HOME/.cache/shadowsocks"
-[[ -d $cache_dir ]] || mkdir "$cache_dir"
+I_CONFIG_DIR="$HOME/.config/shadowsocks"
+I_CACHE_DIR="$HOME/.cache/shadowsocks"
+[[ -d $I_CONFIG_DIR ]] || mkdir -p "$I_CONFIG_DIR"
+[[ -d $I_CACHE_DIR ]] || mkdir -p "$I_CACHE_DIR"
 
-config_dir="$HOME/.config/shadowsocks"
-config_file="$config_dir/config.json"
-conf=`cat "$config_file"`
+CONFIG_FILE="$I_CONFIG_DIR/config.json"
+CONF=`cat "$CONFIG_FILE"`
 
 config_get() {
-    local key=$1
-    echo $(echo "$conf" | sed -n 's/.*"'$key'": *"\{0,1\}\([^,"]*\)"\{0,1\}.*/\1/p')
+  local key=$1
+  echo $(echo "$CONF" | sed -n 's/.*"'$key'": *"\{0,1\}\([^,"]*\)"\{0,1\}.*/\1/p')
 }
 
-server_host=`config_get server`
-server_port=`config_get server_port`
-local_port=`config_get local_port`
-password=`config_get password`
-method=`config_get method`
-kcptun_server_port=`config_get kcptun_server_port`
-over_kcptun=`config_get over_kcptun`
+SS_SERVER_HOST=`config_get server`
+SS_SERVER_PORT=`config_get server_port`
+LOCAL_PORT=`config_get local_port`
+PASSWORD=`config_get password`
+METHOD=`config_get method`
+KCPTUN_SERVER_PORT=`config_get kcptun_server_port`
+OVER_KCPTUN=`config_get over_kcptun`
 
-[[ -z $server_port ]] && server_port="34499"
-[[ -z $local_port ]] && local_port="1080"
-[[ -z $method ]] && method="rc4-md5"
-[[ -z $kcptun_server_port ]] && kcptun_server_port="24499"
-[[ -z $over_kcptun ]] && over_kcptun="0"
+[[ -z $SS_SERVER_PORT ]] && SS_SERVER_PORT="34499"
+[[ -z $LOCAL_PORT ]] && LOCAL_PORT="1080"
+[[ -z $METHOD ]] && METHOD="rc4-md5"
+[[ -z $KCPTUN_SERVER_PORT ]] && KCPTUN_SERVER_PORT="24499"
+[[ -z $OVER_KCPTUN ]] && OVER_KCPTUN="0"
+
+KCPTUN_LOG="/dev/null"
+SS_LOG="/dev/null"
+if [[ `config_get log` = "1" ]]; then
+  KCPTUN_LOG="$I_CACHE_DIR/$KCPTUN.log"
+  SS_LOG="$I_CACHE_DIR/$SS.log"
+fi
 
 get_comm_by_pid() {
-    local pid="$1"
-    echo -n `ps -p $pid -o comm | sed -n '2p'`
-}
-
-get_pid_by_comm() {
-    local comm="$1"
-    echo -n `ps ax | grep $comm | grep -v grep | awk '{ print $1 }'`
+  local pid="$1"
+  echo -n `ps -p $pid -o comm | sed -n '2p'`
 }
 
 is_running() {
-    local comm="$1"
-    local pid_file="$cache_dir/$comm.pid"
+  local comm="$1"
+  local pid_file="$I_CACHE_DIR/$comm.pid"
+
+  if [[ -f $pid_file ]]; then
     local pid=`cat $pid_file`
 
     if [[ -n $pid ]]; then
-        if [[ `get_comm_by_pid $pid` = $comm ]]; then
-            return 0
-        fi
+      if [[ `get_comm_by_pid $pid` = $comm ]]; then
+        return 0
+      fi
 
-        return 2
+      return 3
     fi
 
-    return 1
+    return 2
+  fi
+
+  return 1
 }
 
 start() {
-    echo "start $KCPTUN"
-    nohup $KCPTUN -l ":$kcptun_server_port" \
-        -t "127.0.0.1:$server_port" \
-        --crypt none --mtu 1200 \
-        --mode normal --dscp 46 \
-        --nocomp &
-    echo -n $! > "$cache_dir/$KCPTUN.pid"
+  echo "start $KCPTUN"
+  nohup $KCPTUN -l ":$KCPTUN_SERVER_PORT" \
+    -t "127.0.0.1:$SS_SERVER_PORT" \
+    --crypt none --mtu 1200 \
+    --mode normal --dscp 46 \
+    --nocomp &> "$KCPTUN_LOG" &
+  echo -n $! > "$I_CACHE_DIR/$KCPTUN.pid"
 
-    echo "start $SS"
-    nohup $SS -s 0.0.0.0 -p "$server_port" \
-        -k "$password" -m "$method" -u &
-    echo -n $! > "$cache_dir/$SS.pid"
+  echo "start $SS"
+  nohup $SS -s 0.0.0.0 -p "$SS_SERVER_PORT" \
+    -k "$PASSWORD" -m "$METHOD" -u &> "$SS_LOG" &
+  echo -n $! > "$I_CACHE_DIR/$SS.pid"
 }
 
 kill_process() {
-    local comm=$1
-    local pid_file="$cache_dir/$comm.pid"
+  local comm=$1
+  local pid_file="$I_CACHE_DIR/$comm.pid"
 
-    echo "* try to kill $comm"
-    if [[ -f $pid_file ]]; then
-        local pid=`cat $pid_file`
+  echo "* try to kill $comm"
+  if [[ -f $pid_file ]]; then
+    local pid=`cat $pid_file`
 
-        if [[ -n $pid ]]; then
-
-            if [[ `get_comm_by_pid $pid` = $comm ]]; then
-                echo "kill $comm [$pid]"
-                kill $pid
-                return 0
-            else
-                echo "the process of pid [$pid] is not same as \"$comm\""
-            fi
-
-        else
-            echo "$comm.pid is empty"
-        fi
+    if [[ -n $pid ]]; then
+      if [[ `get_comm_by_pid $pid` = $comm ]]; then
+        echo "kill $comm [$pid]"
+        kill $pid
+        return 0
+      else
+        echo "the process of pid [$pid] is not same as \"$comm\""
+      fi
 
     else
-        echo "$comm.pid not found"
+      echo "$comm.pid is empty"
     fi
 
-    local similar=`ps ax | grep $comm | grep -v grep | awk '{$2=$3=$4="";print $0}'`
-    if [[ -n $similar ]]; then
-        echo the following process of \"$comm\" are similar
-        echo $similar
-    fi
-    echo ""
+  else
+    echo "$comm.pid not found"
+  fi
+
+  local similar=`ps ax | grep $comm | grep -v grep | awk '{$2=$3=$4="";print $0}'`
+  if [[ -n $similar ]]; then
+    echo the following process of \"$comm\" are similar
+    echo $similar
+  fi
+  echo ""
 }
 
 stop() {
-    kill_process $KCPTUN
-    kill_process $SS
+  kill_process $KCPTUN
+  kill_process $SS
+}
+
+restart() {
+  stop
+  start
 }
 
 Y="\033[0;32mo\033[0m"
 N="\033[0;31mx\033[0m"
 
 get_status() {
-    local comm=$1
-    local pid_file="$cache_dir/$comm.pid"
+  local comm=$1
+  local pid_file="$I_CACHE_DIR/$comm.pid"
 
-    local status=$N
+  local status=$N
 
-    if [[ -f $pid_file ]]; then
-        local pid=`cat $pid_file`
-        if [[ -n $pid  && `get_comm_by_pid $pid` = $comm ]]; then
-            status=$Y
-        fi
+  if [[ -f $pid_file ]]; then
+    local pid=`cat $pid_file`
+    if [[ -n $pid  && `get_comm_by_pid $pid` = $comm ]]; then
+      status=$Y
     fi
+  fi
 
-    echo $status
+  echo $status
 }
 
 status() {
-    echo -e "$KCPTUN `get_status $KCPTUN`"
-    echo -e "$SS `get_status $SS`"
+  echo -e "$KCPTUN `get_status $KCPTUN`"
+  echo -e "$SS `get_status $SS`"
 }
 
 case "$1" in
-    start)
-        start
-        ;;
-    stop)
-        stop
-        ;;
-    status)
-        status
-        ;;
-    *)
-        echo "Usage: $0 {start|stop|status}"
+  start)
+    start
+    ;;
+  stop)
+    stop
+    ;;
+  restart)
+    restart
+  status)
+    status
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|status}"
 esac
 

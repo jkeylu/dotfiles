@@ -3,13 +3,12 @@
 KCPTUN="kcptun-client"
 SS="ss-local"
 
-_TMP_ARR_=()
+I_CONFIG_DIR="$HOME/.config/shadowsocks"
+I_CACHE_DIR="$HOME/.cache/shadowsocks"
+[[ -d $I_CONFIG_DIR ]] || mkdir -p "$I_CONFIG_DIR"
+[[ -d $I_CACHE_DIR ]] || mkdir -p "$I_CACHE_DIR"
 
-CACHE_DIR="$HOME/.cache/shadowsocks"
-[[ -d $CACHE_DIR ]] || mkdir "$CACHE_DIR"
-
-CONFIG_DIR="$HOME/.config/shadowsocks"
-CONFIG_FILE="$CONFIG_DIR/config.json"
+CONFIG_FILE="$I_CONFIG_DIR/config.json"
 CONF=`cat "$CONFIG_FILE"`
 
 config_get() {
@@ -40,8 +39,8 @@ fi
 KCPTUN_LOG="/dev/null"
 SS_LOG="/dev/null"
 if [[ `config_get log` = "1" ]]; then
-  KCPTUN_LOG="$CACHE_DIR/$KCPTUN.log"
-  SS_LOG="$CACHE_DIR/$SS.log"
+  KCPTUN_LOG="$I_CACHE_DIR/$KCPTUN.log"
+  SS_LOG="$I_CACHE_DIR/$SS.log"
 fi
 
 get_comm_by_pid() {
@@ -49,26 +48,9 @@ get_comm_by_pid() {
   echo -n `ps -p $pid -o comm | sed -n '2p'`
 }
 
-get_pids_by_comm() {
-  local comm="$1"
-  _TMP_ARR_=(`ps ax | grep $comm | grep -v grep | awk '{ print $1 }'`)
-}
-
-array_contains() {
-  local seeking=$1; shift
-  local in=1
-  for element; do
-    if [[ $element == $seeking ]]; then
-      in=0
-      break
-    fi
-  done
-  return $in
-}
-
 is_running() {
   local comm="$1"
-  local pid_file="$CACHE_DIR/$comm.pid"
+  local pid_file="$I_CACHE_DIR/$comm.pid"
 
   if [[ -f $pid_file ]]; then
     local pid=`cat $pid_file`
@@ -121,7 +103,7 @@ start() {
         --crypt none --mtu 1200 \
         --mode normal --dscp 46 \
         --nocomp &> "$KCPTUN_LOG" &
-      echo -n $! > "$CACHE_DIR/$KCPTUN.pid"
+      echo -n $! > "$I_CACHE_DIR/$KCPTUN.pid"
     fi
   fi
 
@@ -133,13 +115,13 @@ start() {
     nohup $SS -s "$SS_SERVER_HOST" -p "$SS_SERVER_PORT" \
       -k "$PASSWORD" -m "$METHOD" \
       -l "$LOCAL_PORT" &> "$SS_LOG" &
-    echo -n $! > "$CACHE_DIR/$SS.pid"
+    echo -n $! > "$I_CACHE_DIR/$SS.pid"
   fi
 }
 
 kill_process() {
   local comm=$1
-  local pid_file="$CACHE_DIR/$comm.pid"
+  local pid_file="$I_CACHE_DIR/$comm.pid"
 
   echo "* try to kill $comm"
   if [[ -f $pid_file ]]; then
@@ -187,7 +169,7 @@ N="\033[0;31mx\033[0m"
 
 get_status() {
   local comm=$1
-  local pid_file="$CACHE_DIR/$comm.pid"
+  local pid_file="$I_CACHE_DIR/$comm.pid"
 
   local status=$N
 
