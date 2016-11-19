@@ -16,7 +16,7 @@ install() {
   link_file .bin/chss
 
   if ! command_exist kcptun-client; then
-    bash "$OPENER_DIR/kcptun" -i
+    bash "$OPENER_DIR/kcptun.sh" -i
   fi
 
   if [[ $OS = "Darwin" ]]; then
@@ -121,7 +121,7 @@ install_server() {
   link_file .bin/sss.svc
 
   if ! command_exist kcptun-server; then
-    bash "$OPENER_DIR/kcptun" -i
+    bash "$OPENER_DIR/kcptun.sh" -i
   fi
 }
 
