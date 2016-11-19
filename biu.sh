@@ -27,7 +27,19 @@ install() {
   local script="$OPENER_DIR/${1}.sh"
 
   if [[ -f "$script" ]]; then
-    bash "$script" -i
+    shift
+    bash "$script" i "$@"
+  else
+    echo "script \"$script\" not found!"
+  fi
+}
+
+uninstall() {
+  local script="$OPENER_DIR/${1}.sh"
+
+  if [[ -f "$script" ]]; then
+    shift
+    bash "$script" u "$@"
   else
     echo "script \"$script\" not found!"
   fi
@@ -49,17 +61,23 @@ case "$1" in
     show_usage
     exit 0
     ;;
-  -c|c)
-    shift
-    custom "$@"
-    exit 0
-    ;;
   -l|--list|l|list)
     list
     exit 0
     ;;
   -i|--install|i|install)
-    install "$2"
+    shift
+    install "$@"
+    exit 0
+    ;;
+  -u|--uninstall|u|uninstall)
+    shift
+    uninstall "$@"
+    exit 0
+    ;;
+  -c|c)
+    shift
+    custom "$@"
     exit 0
     ;;
   -r|--restore|r|restore)

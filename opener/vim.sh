@@ -16,7 +16,14 @@ install_lite() {
   link_file .vimrc
 }
 
-[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
-[[ "-l" = $1 || "l" = $1 ]] && install_lite && exit 0
-exit 1
+case "$1" in
+  -i|--install|i|install)
+    [[ -n $2 ]] && $(install_${2}) || install
+    ;;
+  *)
+    echo "nothing to do ..."
+    exit 1
+esac
+
+exit 0
 

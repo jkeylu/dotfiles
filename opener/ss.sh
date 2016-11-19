@@ -15,12 +15,12 @@ install() {
   link_file .bin/ssc.svc
   link_file .bin/chss
 
+  if ! command_exist kcptun-client; then
+    bash "$OPENER_DIR/kcptun" -i
+  fi
+
   if [[ $OS = "Darwin" ]]; then
     [[ -d $LAUNCH_AGENTS ]] || mkdir -p "$LAUNCH_AGENTS"
-
-    if ! command_exist kcptun-client; then
-      bash "$OPENER_DIR/kcptun" -i
-    fi
 
     if ! command_exist ss-local; then
       command_exist brew || log "brew is not installed" && exit 1
@@ -116,6 +116,15 @@ EOF
   fi
 }
 
+install_server() {
+  link_file .config/shadowsocks/
+  link_file .bin/sss.svc
+
+  if ! command_exist kcptun-server; then
+    bash "$OPENER_DIR/kcptun" -i
+  fi
+}
+
 uninstall() {
   if [[ $OS = "Darwin" ]]; then
     launchctl unload "$KCPTUN_PLIST_LINK"
@@ -127,7 +136,17 @@ uninstall() {
   fi
 }
 
-[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
-[[ "-u" = $1 || "u" = $1 ]] && uninstall && exit 0
-exit 1
+case "$1" in
+  -i|--install|i|install)
+    [[ -n $2 ]] && $(install_${2}) || install
+    ;;
+  -u|--uninstall|u|uninstall)
+    uninstall
+    ;;
+  *)
+    echo "nothing to do ..."
+    exit 1
+esac
+
+exit 0
 
