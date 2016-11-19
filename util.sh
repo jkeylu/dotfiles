@@ -19,8 +19,14 @@ BACKUP_DIR="$HOME/.dotfiles.bak"
 
 OS=`uname`
 if [[ $OS != 'Darwin' ]]; then
-  OS_ID=`sed -n 's/^ID=\(.*\)$/\1/p' /etc/os-release`
-  OS_ID_LIKE=`sed -n 's/^ID_LIKE=\(.*\)$/\1/p' /etc/os-release`
+  if [[ -f "/etc/os-release" ]]; then
+    OS_ID=`sed -n 's/^ID=\(.*\)$/\1/p' /etc/os-release`
+    OS_ID_LIKE=`sed -n 's/^ID_LIKE=\(.*\)$/\1/p' /etc/os-release`
+
+  elif [[ -f "/etc/centos-release" ]]; then
+    OS_ID="centos"
+    OS_ID_LIKE="redhat"
+  fi
 fi
 
 log() {

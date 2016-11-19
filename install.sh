@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 
-os=`uname`
-if [[ $os != 'Darwin' ]]; then
-  os_id=`sed -n 's/^ID=\(.*\)$/\1/p' /etc/os-release`
-  os_id_like=`sed -n 's/^ID_LIKE=\(.*\)$/\1/p' /etc/os-release`
+OS=`uname`
+if [[ $OS != 'Darwin' ]]; then
+  if [[ -f "/etc/os-release" ]]; then
+    OS_ID=`sed -n 's/^ID=\(.*\)$/\1/p' /etc/os-release`
+    OS_ID_LIKE=`sed -n 's/^ID_LIKE=\(.*\)$/\1/p' /etc/os-release`
+
+  elif [[ -f "/etc/centos-release" ]]; then
+    OS_ID="centos"
+    OS_ID_LIKE="redhat"
+  fi
 fi
 
 log() {
@@ -11,17 +17,21 @@ log() {
 }
 
 if ! command -v git &> /dev/null; then
-  if [[ $os = "Darwin" ]]; then
+  if [[ $OS = "Darwin" ]]; then
     log xcode-select --install
     xcode-select --install
 
-  elif [[ $os_id = "debian" || $os_id_like = "debian" ]]; then
+  elif [[ $OS_ID = "debian" || $OS_ID_LIKE = "debian" ]]; then
     log sudo apt-get install git
     sudo apt-get install git
 
-  elif [[ $os_id = "arch" || $os_id_like = "arch" ]]; then
+  elif [[ $OS_ID = "arch" || $OS_ID_LIKE = "arch" ]]; then
     log sudo pacman -S git
     sudo pacman -S git
+
+  elif [[ $OS_ID = "centos" ]]; then
+    log sudo yum install git
+    sudo yum install git
 
   else
     log "git is required, please install git first"
