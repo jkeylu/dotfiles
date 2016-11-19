@@ -18,7 +18,11 @@ install_lite() {
 
 case "$1" in
   -i|--install|i|install)
-    [[ -n $2 ]] && $(install_${2}) || install
+    if [[ -n $2 ]]; then
+      "install_${2}"
+    else
+      install
+    fi
     ;;
   *)
     echo "nothing to do ..."

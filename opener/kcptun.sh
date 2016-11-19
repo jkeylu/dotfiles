@@ -3,7 +3,7 @@
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
 install() {
-  if [[ -e "$BIN_DIR/kcptun_client" ]]; then
+  if [[ -e "$BIN_DIR/kcptun-client" ]]; then
     log "kcptun already installed"
     exit 0
   fi

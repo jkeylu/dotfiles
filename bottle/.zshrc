@@ -72,7 +72,7 @@ export LANG=zh_CN.UTF-8
 # else
 #   export EDITOR='mvim'
 # fi
-if command -v vim >/dev/null 2>&1; then
+if command -v vim &> /dev/null; then
   export EDITOR='vim'
 else
   export EDITOR='vi'

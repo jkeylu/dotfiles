@@ -138,7 +138,11 @@ uninstall() {
 
 case "$1" in
   -i|--install|i|install)
-    [[ -n $2 ]] && $(install_${2}) || install
+    if [[ -n $2 ]]; then
+      "install_${2}"
+    else
+      install
+    fi
     ;;
   -u|--uninstall|u|uninstall)
     uninstall
