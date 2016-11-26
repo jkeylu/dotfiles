@@ -9,6 +9,22 @@ I_CACHE_DIR="$HOME/.cache/shadowsocks"
 [[ -d $I_CONFIG_DIR ]] || mkdir -p "$I_CONFIG_DIR"
 [[ -d $I_CACHE_DIR ]] || mkdir -p "$I_CACHE_DIR"
 
+assert_file_exists() {
+  if [[ ! -f $1 ]]; then
+    echo "file not exists: $1" 1>&2
+    exit 1
+  fi
+}
+
+assert_not_empty() {
+  local value=$1
+  local name=$2
+  if [[ -z $value ]]; then
+    echo "\"$name\" is empty" 1>&2
+    exit 1
+  fi
+}
+
 config_get() {
   local key=$1
   echo $(echo "$CONF" | sed -n 's/.*"'$key'": *"\{0,1\}\([^,"]*\)"\{0,1\}.*/\1/p')
@@ -33,11 +49,7 @@ load_config() {
 
   local cfg=$CONFIG_NAME
   local config_file="$I_CONFIG_DIR/$(format_name "config.json" "$cfg")"
-
-  if [[ -f $config_file ]]; then
-    echo "not exists: $config_file" 1>&2
-    exit 1
-  fi
+  assert_file_exists "$config_file"
 
   CONF=`cat "$config_file"`
 
@@ -61,6 +73,8 @@ load_config() {
     KCPTUN_LOG="$I_CACHE_DIR/$(format_name "$KCPTUN.log" "$cfg")"
     SS_LOG="$I_CACHE_DIR/$(format_name "$SS.log" "$cfg")"
   fi
+
+  assert_not_empty "$PASSWORD" "PASSWORD"
 }
 
 get_comm_by_pid() {
