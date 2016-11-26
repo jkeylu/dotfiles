@@ -165,8 +165,8 @@ get_status() {
 
 status() {
   echo "== default"
-  echo -e "$KCPTUN `get_status $KCPTUN`"
-  echo -e "$SS `get_status $SS`"
+  echo -e "$KCPTUN $(get_status $KCPTUN)"
+  echo -e "$SS $(get_status $SS)"
   echo ""
 
   for cfg in $(ls "$I_CACHE_DIR" | sed -n 's/\([^.]\+\)\..\+\.pid/\1/p' | uniq); do
@@ -175,6 +175,14 @@ status() {
     echo -e "$SS $(get_status $SS $cfg)"
     echo ""
   done
+
+  local a=$(ps ax | grep "$KCPTUN\|$SS" | grep -v grep | awk '{print $1}')
+  local b=$(awk 'FNR==1{print ""}1' $I_CACHE_DIR/*.pid)
+  echo "== not managed"
+  for pid in $(sort <(echo "$a") <(echo "$b") <(echo "$b") | uniq -u); do
+    ps u -p $pid | tail -1
+  done
+  echo ""
 }
 
 cleanup() {
