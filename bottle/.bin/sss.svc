@@ -178,7 +178,7 @@ status() {
 }
 
 cleanup() {
-  if [[ "-n" = $1 ]]; then
+  if [[ "-f" != $1 ]]; then
     echo "= $KCPTUN process"
     ps ax | grep "$KCPTUN" | grep -v grep | awk '{$2=$3=$4="";print $0}'
     echo ""
@@ -186,6 +186,23 @@ cleanup() {
     echo "= $SS process"
     ps ax | grep "$SS" | grep -v grep | awk '{$2=$3=$4="";print $0}'
     echo ""
+
+  else
+    echo "= killing $KCPTUN process"
+    for pid in $(ps ax | grep "$KCPTUN" | grep -v grep | awk '{print $1}'); do
+      echo "kill pid [$pid]"
+      kill "$pid"
+    done
+
+    echo "= killing $SS process"
+    for pid in $(ps ax | grep "$SS" | grep -v grep | awk '{print $1}'); do
+      echo "kill pid [$pid]"
+      kill "$pid"
+    done
+
+    echo "= cleaning cache"
+    rm -f "$I_CACHE_DIR/*.pid"
+    rm -f "$I_CACHE_DIR/*.log"
   fi
 }
 
