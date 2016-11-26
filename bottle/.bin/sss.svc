@@ -31,7 +31,7 @@ load_config() {
     CONFIG_NAME=$1
   fi
 
-  local cfg=CONFIG_NAME
+  local cfg=$CONFIG_NAME
   local config_file="$I_CONFIG_DIR/$(format_name "config.json" "$cfg")"
 
   if [[ -f $config_file ]]; then
