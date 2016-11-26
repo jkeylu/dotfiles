@@ -74,6 +74,9 @@ case "$1" in
   stop)
     stop
     ;;
+  restart)
+    restart
+    ;;
   s|st|status)
     status
     ;;

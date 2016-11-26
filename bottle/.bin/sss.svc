@@ -82,27 +82,6 @@ get_comm_by_pid() {
   echo -n `ps -p $pid -o comm | sed -n '2p'`
 }
 
-is_running() {
-  local comm="$1"
-  local pid_file="$I_CACHE_DIR/$comm.pid"
-
-  if [[ -f $pid_file ]]; then
-    local pid=`cat $pid_file`
-
-    if [[ -n $pid ]]; then
-      if [[ `get_comm_by_pid $pid` = $comm ]]; then
-        return 0
-      fi
-
-      return 3
-    fi
-
-    return 2
-  fi
-
-  return 1
-}
-
 start() {
   load_config "$1"
 
@@ -137,6 +116,7 @@ kill_process() {
       if [[ `get_comm_by_pid $pid` = $comm ]]; then
         echo "kill $comm [$pid]"
         kill $pid
+        rm -f "$pid_file"
         return 0
       else
         echo "the process of pid [$pid] is not same as \"$comm\""
@@ -149,13 +129,6 @@ kill_process() {
   else
     echo "$comm.pid not found"
   fi
-
-  #local similar=`ps ax | grep $comm | grep -v grep | awk '{$2=$3=$4="";print $0}'`
-  #if [[ -n $similar ]]; then
-  #  echo the following process of \"$comm\" are similar
-  #  echo $similar
-  #fi
-  #echo ""
 }
 
 stop() {
@@ -194,12 +167,26 @@ status() {
   echo "== default"
   echo -e "$KCPTUN `get_status $KCPTUN`"
   echo -e "$SS `get_status $SS`"
+  echo ""
 
   for cfg in $(ls "$I_CACHE_DIR" | sed -n 's/\([^.]\+\)\..\+\.pid/\1/p' | uniq); do
     echo "== $cfg"
     echo -e "$KCPTUN $(get_status $KCPTUN $cfg)"
     echo -e "$SS $(get_status $SS $cfg)"
+    echo ""
   done
+}
+
+cleanup() {
+  if [[ "-n" = $1 ]]; then
+    echo "= $KCPTUN process"
+    ps ax | grep "$KCPTUN" | grep -v grep | awk '{$2=$3=$4="";print $0}'
+    echo ""
+
+    echo "= $SS process"
+    ps ax | grep "$SS" | grep -v grep | awk '{$2=$3=$4="";print $0}'
+    echo ""
+  fi
 }
 
 case "$1" in
@@ -217,6 +204,10 @@ case "$1" in
     ;;
   status)
     status
+    ;;
+  cleanup)
+    shift
+    cleanup "$@"
     ;;
   *)
     echo "Usage: $0 {start|stop|status}"
