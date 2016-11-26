@@ -2,40 +2,66 @@
 
 KCPTUN="kcptun-server"
 SS="ss-server"
+DEFAULT_CONFIG_NAME="default"
 
 I_CONFIG_DIR="$HOME/.config/shadowsocks"
 I_CACHE_DIR="$HOME/.cache/shadowsocks"
 [[ -d $I_CONFIG_DIR ]] || mkdir -p "$I_CONFIG_DIR"
 [[ -d $I_CACHE_DIR ]] || mkdir -p "$I_CACHE_DIR"
 
-CONFIG_FILE="$I_CONFIG_DIR/config.json"
-CONF=`cat "$CONFIG_FILE"`
-
 config_get() {
   local key=$1
   echo $(echo "$CONF" | sed -n 's/.*"'$key'": *"\{0,1\}\([^,"]*\)"\{0,1\}.*/\1/p')
 }
 
-SS_SERVER_HOST=`config_get server`
-SS_SERVER_PORT=`config_get server_port`
-LOCAL_PORT=`config_get local_port`
-PASSWORD=`config_get password`
-METHOD=`config_get method`
-KCPTUN_SERVER_PORT=`config_get kcptun_server_port`
-OVER_KCPTUN=`config_get over_kcptun`
+format_name() {
+  local name=$1
+  local cfg=$2
 
-[[ -z $SS_SERVER_PORT ]] && SS_SERVER_PORT="34499"
-[[ -z $LOCAL_PORT ]] && LOCAL_PORT="1080"
-[[ -z $METHOD ]] && METHOD="rc4-md5"
-[[ -z $KCPTUN_SERVER_PORT ]] && KCPTUN_SERVER_PORT="24499"
-[[ -z $OVER_KCPTUN ]] && OVER_KCPTUN="0"
+  if [[ -z $cfg || $cfg = $DEFAULT_CONFIG_NAME ]]; then
+    echo "$name"
+  else
+    echo "$cfg.$name"
+  fi
+}
 
-KCPTUN_LOG="/dev/null"
-SS_LOG="/dev/null"
-if [[ `config_get log` = "1" ]]; then
-  KCPTUN_LOG="$I_CACHE_DIR/$KCPTUN.log"
-  SS_LOG="$I_CACHE_DIR/$SS.log"
-fi
+load_config() {
+  CONFIG_NAME=$DEFAULT_CONFIG_NAME
+  if [[ -n $1 ]]; then
+    CONFIG_NAME=$1
+  fi
+
+  local cfg=CONFIG_NAME
+  local config_file="$I_CONFIG_DIR/$(format_name "config.json" "$cfg")"
+
+  if [[ -f $config_file ]]; then
+    echo "not exists: $config_file" 1>&2
+    exit 1
+  fi
+
+  CONF=`cat "$config_file"`
+
+  SS_SERVER_HOST=`config_get server`
+  SS_SERVER_PORT=`config_get server_port`
+  LOCAL_PORT=`config_get local_port`
+  PASSWORD=`config_get password`
+  METHOD=`config_get method`
+  KCPTUN_SERVER_PORT=`config_get kcptun_server_port`
+  OVER_KCPTUN=`config_get over_kcptun`
+
+  [[ -z $SS_SERVER_PORT ]] && SS_SERVER_PORT="34499"
+  [[ -z $LOCAL_PORT ]] && LOCAL_PORT="1080"
+  [[ -z $METHOD ]] && METHOD="rc4-md5"
+  [[ -z $KCPTUN_SERVER_PORT ]] && KCPTUN_SERVER_PORT="24499"
+  [[ -z $OVER_KCPTUN ]] && OVER_KCPTUN="0"
+
+  KCPTUN_LOG="/dev/null"
+  SS_LOG="/dev/null"
+  if [[ `config_get log` = "1" ]]; then
+    KCPTUN_LOG="$I_CACHE_DIR/$(format_name "$KCPTUN.log" "$cfg")"
+    SS_LOG="$I_CACHE_DIR/$(format_name "$SS.log" "$cfg")"
+  fi
+}
 
 get_comm_by_pid() {
   local pid="$1"
@@ -64,23 +90,30 @@ is_running() {
 }
 
 start() {
+  load_config "$1"
+
+  local cfg=$CONFIG_NAME
+  local kcptun_pid_file="$I_CACHE_DIR/$(format_name "$KCPTUN.pid" "$cfg")"
+  local ss_pid_file="$I_CACHE_DIR/$(format_name "$SS.pid" "$cfg")"
+
   echo "start $KCPTUN"
   nohup $KCPTUN -l ":$KCPTUN_SERVER_PORT" \
     -t "127.0.0.1:$SS_SERVER_PORT" \
     --crypt none --mtu 1200 \
     --mode normal --dscp 46 \
     --nocomp &> "$KCPTUN_LOG" &
-  echo -n $! > "$I_CACHE_DIR/$KCPTUN.pid"
+  echo -n $! > "$kcptun_pid_file"
 
   echo "start $SS"
   nohup $SS -s 0.0.0.0 -p "$SS_SERVER_PORT" \
     -k "$PASSWORD" -m "$METHOD" -u &> "$SS_LOG" &
-  echo -n $! > "$I_CACHE_DIR/$SS.pid"
+  echo -n $! > "$ss_pid_file"
 }
 
 kill_process() {
   local comm=$1
-  local pid_file="$I_CACHE_DIR/$comm.pid"
+  local cfg=$2
+  local pid_file="$I_CACHE_DIR/$(format_name "$comm.pid" "$cfg")"
 
   echo "* try to kill $comm"
   if [[ -f $pid_file ]]; then
@@ -103,22 +136,24 @@ kill_process() {
     echo "$comm.pid not found"
   fi
 
-  local similar=`ps ax | grep $comm | grep -v grep | awk '{$2=$3=$4="";print $0}'`
-  if [[ -n $similar ]]; then
-    echo the following process of \"$comm\" are similar
-    echo $similar
-  fi
-  echo ""
+  #local similar=`ps ax | grep $comm | grep -v grep | awk '{$2=$3=$4="";print $0}'`
+  #if [[ -n $similar ]]; then
+  #  echo the following process of \"$comm\" are similar
+  #  echo $similar
+  #fi
+  #echo ""
 }
 
 stop() {
-  kill_process $KCPTUN
-  kill_process $SS
+  local cfg=$1
+
+  kill_process $KCPTUN $cfg
+  kill_process $SS $cfg
 }
 
 restart() {
-  stop
-  start
+  stop "$@"
+  start "$@"
 }
 
 Y="\033[0;32mo\033[0m"
@@ -126,7 +161,8 @@ N="\033[0;31mx\033[0m"
 
 get_status() {
   local comm=$1
-  local pid_file="$I_CACHE_DIR/$comm.pid"
+  local cfg=$2
+  local pid_file="$I_CACHE_DIR/$(format_name "$comm.pid" "$cfg")"
 
   local status=$N
 
@@ -141,19 +177,29 @@ get_status() {
 }
 
 status() {
+  echo "== default"
   echo -e "$KCPTUN `get_status $KCPTUN`"
   echo -e "$SS `get_status $SS`"
+
+  for cfg in $(ls "$I_CACHE_DIR" | sed -n 's/\([^.]\+\)\..\+\.pid/\1/p' | uniq); do
+    echo "== $cfg"
+    echo -e "$KCPTUN $(get_status $KCPTUN $cfg)"
+    echo -e "$SS $(get_status $SS $cfg)"
+  done
 }
 
 case "$1" in
   start)
-    start
+    shift
+    start "$@"
     ;;
   stop)
-    stop
+    shift
+    stop "$@"
     ;;
   restart)
-    restart
+    shift
+    restart "$@"
     ;;
   status)
     status
