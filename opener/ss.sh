@@ -125,6 +125,35 @@ install_server() {
   fi
 }
 
+install_config() {
+  local config_file="$I_CONFIG_DIR/config.json"
+
+  if [[ -n $1 ]]; then
+    config_file="$I_CONFIG_DIR/${1}.config.json"
+  fi
+
+  if [[ -f $config_file ]]; then
+    echo "file exists: $config_file"
+    exit 0
+  fi
+
+  cat > "$config_file" << 'EOF'
+{
+  "server": "",
+  "server_port": 34499,
+  "local_port": 1080,
+  "password": "",
+  "timeout": 600,
+  "method": "rc4-md5",
+  "kcptun_server_port": 24499,
+  "over_kcptun": 1,
+  "log": 0
+}
+EOF
+
+  echo "vim $config_file"
+}
+
 uninstall() {
   if [[ $OS = "Darwin" ]]; then
     launchctl unload "$KCPTUN_PLIST_LINK"
@@ -139,7 +168,9 @@ uninstall() {
 case "$1" in
   -i|--install|i|install)
     if [[ -n $2 ]]; then
-      "install_${2}"
+      _name="$2"
+      shift 2
+      "install_${_name}" "$@"
     else
       install
     fi
