@@ -39,8 +39,29 @@ restart() {
   start
 }
 
+Y="\033[0;32mo\033[0m"
+N="\033[0;31mx\033[0m"
+
 status() {
-  echo ""
+  local st=$N
+  if [[ `config_get over_kcptun` = "1" ]]; then
+    st=$Y
+  fi
+  echo -e "over kcptun $st"
+
+  local pid=$(launchctl list |  awk '/lu.jkey.kcptun-client/{print $1}')
+  st=$N
+  if [[ -n $pid && "-" != $pid ]]; then
+    st=$Y
+  fi
+  echo -e "kcptun-client $st"
+
+  pid=$(launchctl list |  awk '/lu.jkey.ss-local/{print $1}')
+  st=$N
+  if [[ -n $pid && "-" != $pid ]]; then
+    st=$Y
+  fi
+  echo -e "ss-local $st"
 }
 
 list() {
@@ -89,7 +110,7 @@ case "$1" in
       exit 0
     fi
 
-    echo "Usage: $0 {start|stop|list|status|config-name}"
+    echo "Usage: $0 {start|stop|restart|list|status|config-name}"
     ;;
 esac
 

@@ -177,7 +177,7 @@ status() {
   done
 
   local a=$(ps ax | grep "$KCPTUN\|$SS" | grep -v grep | awk '{print $1}')
-  local b=$(awk 'FNR==1{print ""}1' $I_CACHE_DIR/*.pid)
+  local b=$(awk 'FNR==1{print ""}1' $I_CACHE_DIR/*.pid 2>/dev/null)
   echo "== not managed"
   for pid in $(sort <(echo "$a") <(echo "$b") <(echo "$b") | uniq -u); do
     ps u -p $pid | tail -1
@@ -235,6 +235,6 @@ case "$1" in
     cleanup "$@"
     ;;
   *)
-    echo "Usage: $0 {start|stop|status}"
+    echo "Usage: $0 {start|stop|restart|status|cleanup}"
 esac
 
