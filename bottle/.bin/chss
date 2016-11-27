@@ -43,6 +43,10 @@ Y="\033[0;32mo\033[0m"
 N="\033[0;31mx\033[0m"
 
 status() {
+  local src="$CONFIG_DIR/config.json"
+  local target="$(ls -l "$src" | awk -F "-> " '{print $2}' | grep -o '[^./]\+\.config\.json')"
+  echo -e "config.json \033[0;35m->\033[0m $target\n"
+
   local st=$N
   if [[ `config_get over_kcptun` = "1" ]]; then
     st=$Y
