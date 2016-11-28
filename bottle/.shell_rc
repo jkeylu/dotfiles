@@ -1,0 +1,62 @@
+# User configuration
+
+export PATH=$HOME/.bin:$PATH
+# export MANPATH="/usr/local/man:$MANPATH"
+
+# You may need to manually set your language environment
+# export LANG=en_US.UTF-8
+export LANG=zh_CN.UTF-8
+
+# Preferred editor for local and remote sessions
+# if [[ -n $SSH_CONNECTION ]]; then
+#   export EDITOR='vim'
+# else
+#   export EDITOR='mvim'
+# fi
+if command -v vim &> /dev/null; then
+  export EDITOR='vim'
+else
+  export EDITOR='vi'
+fi
+
+# Compilation flags
+# export ARCHFLAGS="-arch x86_64"
+
+# ssh
+# export SSH_KEY_PATH="~/.ssh/dsa_id"
+
+# Set personal aliases, overriding those provided by oh-my-zsh libs,
+# plugins, and themes. Aliases can be placed here, though oh-my-zsh
+# users are encouraged to define aliases within the ZSH_CUSTOM folder.
+# For a full list of active aliases, run `alias`.
+#
+# Example aliases
+# alias zshconfig="mate ~/.zshrc"
+# alias ohmyzsh="mate ~/.oh-my-zsh"
+[[ -f ~/.shell_alias ]] && source ~/.shell_alias
+[[ -f ~/.shell_alias_private ]] && source ~/.shell_alias_private
+
+# shell functions
+[[ -f ~/.shell_function ]] && source ~/.shell_function
+[[ -f ~/.shell_function_private ]] && source ~/.shell_function_private
+
+# disable CTRL-D to close window
+set -o ignoreeof
+
+# vimx
+[[ -r ~/.vim/vimx.sh ]] && source ~/.vim/vimx.sh
+
+# nvm
+export NVM_DIR=$HOME/.nvm
+export NVM_NODEJS_ORG_MIRROR=http://npm.taobao.org/mirrors/node
+[[ -s $NVM_DIR/nvm.sh ]] && source $NVM_DIR/nvm.sh  # This loads nvm
+[[ -r $NVM_DIR/bash_completion ]] && source $NVM_DIR/bash_completion
+
+# go
+export GOPATH=$HOME/Projects/gocode
+export PATH=$GOPATH/bin:$PATH
+
+# electron
+export ELECTRON_MIRROR=http://npm.taobao.org/mirrors/electron/
+
+# vim:ft=sh et ts=2 sw=2 sts=2

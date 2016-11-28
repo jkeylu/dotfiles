@@ -3,6 +3,7 @@
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
 install() {
+  link_file .shell_rc
   link_file .bashrc
   link_file .bash_profile
   link_file .shell_alias
