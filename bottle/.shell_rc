@@ -1,6 +1,6 @@
 # User configuration
 
-if [[ -z $(echo "$PATH" | grep '[^\w]/usr/local/bin[^/]') ]]; then
+if [[ -z $(echo "$PATH" | grep '\(^\|[^\w]\)/usr/local/bin\([^/]\|$\)') ]]; then
   export PATH=/usr/local/bin:$PATH
 fi
 if [[ -z $(echo $PATH | grep "$HOME/bin") ]]; then
