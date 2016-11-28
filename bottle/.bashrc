@@ -5,8 +5,6 @@ if [[ -f /etc/bashrc ]]; then
   source /etc/bashrc
 fi
 
-export PATH=$HOME/bin:/usr/local/bin:$PATH
-
 # User configuration
 
 source $HOME/.shell_rc
