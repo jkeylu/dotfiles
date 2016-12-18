@@ -24,5 +24,10 @@
         "key": "cmd+r",
         "command": "workbench.action.tasks.runTask",
         "when": "editorTextFocus"
+    },
+    {
+        "key": "shift+alt+`",
+        "command": "workbench.action.terminal.focusNext",
+        "when": "terminalFocus"
     }
 ]
