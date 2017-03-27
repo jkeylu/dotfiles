@@ -6,7 +6,7 @@ install() {
   link_file .fzf.zsh
 
   if [[ $OS = "Darwin" ]]; then
-    command_exist brew || log "brew is not installed" && exit 1
+    command_exist brew || (log "brew is not installed" && exit 1)
     brew install fzf
   fi
 }

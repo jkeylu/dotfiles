@@ -7,7 +7,7 @@ install() {
 
   if ! command_exist tmux; then
     if [[ $OS = "Darwin" ]]; then
-      command_exist brew || log "brew is not installed" && exit 1
+      command_exist brew || (log "brew is not installed" && exit 1)
       brew install tmux
       brew install reattach-to-user-namespace
 
