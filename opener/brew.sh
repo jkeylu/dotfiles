@@ -15,6 +15,26 @@ install() {
   /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 }
 
-[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
-exit 1
+uninstall() {
+  if ! command_exist brew; then
+    log "brew is not exist"
+    exit 0
+  fi
+
+  /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/uninstall)"
+}
+
+case "$1" in
+  -i|--install|i|install)
+    install
+    ;;
+  -u|--uninstall|u|uninstall)
+    uninstall
+    ;;
+  *)
+    echo "nothing to do ..."
+    exit 1
+esac
+
+exit 0
 
