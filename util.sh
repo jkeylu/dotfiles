@@ -116,3 +116,9 @@ init_work_dir() {
   [[ -d $I_CACHE_DIR ]] || mkdir "$I_CACHE_DIR"
 }
 
+join_by() {
+  local IFS="$1"
+  shift
+  echo "$*"
+}
+

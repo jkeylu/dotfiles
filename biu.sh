@@ -7,8 +7,8 @@ show_usage() {
 usage: ./biu.sh [option] name
 
 option:
-  -c run script with custom args
   -l list all dotfiles that can be installed
+  -x run script with custom args
   -i install dotfiles
   -r restore dotfiles
   -h show this help message
@@ -28,7 +28,7 @@ install() {
 
   if [[ -f "$script" ]]; then
     shift
-    bash "$script" i "$@"
+    bash "$script" install
   else
     echo "script \"$script\" not found!"
   fi
@@ -39,13 +39,13 @@ uninstall() {
 
   if [[ -f "$script" ]]; then
     shift
-    bash "$script" u "$@"
+    bash "$script" uninstall
   else
     echo "script \"$script\" not found!"
   fi
 }
 
-custom() {
+x() {
   local script="$OPENER_DIR/${1}.sh"
 
   if [[ -f "$script" ]]; then
@@ -75,9 +75,9 @@ case "$1" in
     uninstall "$@"
     exit 0
     ;;
-  -c|c)
+  -x|x)
     shift
-    custom "$@"
+    x "$@"
     exit 0
     ;;
   -r|--restore|r|restore)

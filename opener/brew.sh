@@ -2,6 +2,14 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
+help() {
+  cat << EOF
+supported commands:
+  install
+  uninstall
+EOF
+}
+
 install() {
   if [[ $OS != 'Darwin' ]]; then
     log "os is not macOS"
@@ -24,17 +32,10 @@ uninstall() {
   /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/uninstall)"
 }
 
-case "$1" in
-  -i|--install|i|install)
-    install
-    ;;
-  -u|--uninstall|u|uninstall)
-    uninstall
-    ;;
-  *)
-    echo "nothing to do ..."
-    exit 1
-esac
-
-exit 0
+cmd="$(join_by _ "$@")"
+if [[ -n $cmd ]]; then
+  "$cmd"
+else
+  help
+fi
 

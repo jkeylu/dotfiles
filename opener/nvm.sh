@@ -2,6 +2,14 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
+help() {
+  cat << EOF
+supported commands:
+  install
+  install wsl
+EOF
+}
+
 install() {
   if [[ -d ~/.nvm ]]; then
     log "nvm already installed"
@@ -11,6 +19,10 @@ install() {
   git clone https://github.com/creationix/nvm.git ~/.nvm && cd ~/.nvm && git checkout `git describe --abbrev=0 --tags`
 }
 
-[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
-exit 1
+cmd="$(join_by _ "$@")"
+if [[ -n $cmd ]]; then
+  "$cmd"
+else
+  help
+fi
 

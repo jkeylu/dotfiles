@@ -2,6 +2,14 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
+help() {
+  cat << EOF
+supported commands:
+  install
+  install lite
+EOF
+}
+
 install() {
   [[ -d ~/.vim/.git ]] && exit 0
 
@@ -16,18 +24,10 @@ install_lite() {
   link_file .vimrc
 }
 
-case "$1" in
-  -i|--install|i|install)
-    if [[ -n $2 ]]; then
-      "install_${2}"
-    else
-      install
-    fi
-    ;;
-  *)
-    echo "nothing to do ..."
-    exit 1
-esac
-
-exit 0
+cmd="$(join_by _ "$@")"
+if [[ -n $cmd ]]; then
+  "$cmd"
+else
+  help
+fi
 

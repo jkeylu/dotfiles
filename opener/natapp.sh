@@ -2,6 +2,13 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
+help() {
+  cat << EOF
+supported commands:
+  install
+EOF
+}
+
 install() {
   if [[ -e "$BIN_DIR/ngrok" ]]; then
     log "$BIN_DIR/ngrok already exists"
@@ -31,6 +38,10 @@ install() {
   chmod +x "$BIN_DIR/ngrok"
 }
 
-[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
-exit 1
+cmd="$(join_by _ "$@")"
+if [[ -n $cmd ]]; then
+  "$cmd"
+else
+  help
+fi
 

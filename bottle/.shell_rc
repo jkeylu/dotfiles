@@ -3,9 +3,17 @@
 if [[ -z $(echo "$PATH" | grep '\(^\|[^\w]\)/usr/local/bin\([^/]\|$\)') ]]; then
   export PATH=/usr/local/bin:$PATH
 fi
+
 if [[ -z $(echo $PATH | grep "$HOME/bin") ]]; then
   export PATH=$HOME/bin:$PATH
 fi
+
+if [[ -d $HOME/.linuxbrew ]]; then
+  export PATH="$HOME/.linuxbrew/bin:$PATH"
+  export MANPATH="$HOME/.linuxbrew/share/man:$MANPATH"
+  export INFOPATH="$HOME/.linuxbrew/share/info:$INFOPATH"
+fi
+
 export PATH=$HOME/.bin:$PATH
 [[ -d $HOME/Dropbox ]] && export PATH=$HOME/Dropbox/usr/bin:$PATH
 # export MANPATH="/usr/local/man:$MANPATH"

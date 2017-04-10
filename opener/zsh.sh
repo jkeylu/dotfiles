@@ -2,6 +2,14 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
+help() {
+  cat << EOF
+supported commands:
+  install
+  install wsl
+EOF
+}
+
 install() {
   link_file .shell_rc
   link_file .zshrc
@@ -38,6 +46,16 @@ install() {
   chsh -s /bin/zsh
 }
 
-[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
-exit 1
+install_wsl() {
+  link_file .bashrc
+
+  install
+}
+
+cmd="$(join_by _ "$@")"
+if [[ -n $cmd ]]; then
+  "$cmd"
+else
+  help
+fi
 

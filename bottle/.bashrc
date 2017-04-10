@@ -1,5 +1,14 @@
 # .bashrc
 
+# WSL
+if [[ -f /proc/version ]]; then
+  if [[ cat /proc/version | grep --silent 'Microsoft' ]]; then
+    if [[ -t 1 ]]; then
+      exec zsh
+    fi
+  fi
+fi
+
 # Source global definitions
 if [[ -f /etc/bashrc ]]; then
   source /etc/bashrc

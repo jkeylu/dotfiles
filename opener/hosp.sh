@@ -4,6 +4,13 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
 init_work_dir hosp
 
+help() {
+  cat << EOF
+supported commands:
+  install
+EOF
+}
+
 install() {
   link_file .config/hosp/
 
@@ -72,6 +79,10 @@ EOF
   fi
 }
 
-[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
-exit 1
+cmd="$(join_by _ "$@")"
+if [[ -n $cmd ]]; then
+  "$cmd"
+else
+  help
+fi
 

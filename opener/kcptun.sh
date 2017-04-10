@@ -2,6 +2,13 @@
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
 
+help() {
+  cat << EOF
+supported commands:
+  install
+EOF
+}
+
 install() {
   if [[ -e "$BIN_DIR/kcptun-client" ]]; then
     log "kcptun already installed"
@@ -27,6 +34,10 @@ install() {
   mv "${BIN_DIR}/server_${name}_386" "${BIN_DIR}/kcptun-server"
 }
 
-[[ 0 = $# || "-i" = $1 || "i" = $1 ]] && install && exit 0
-exit 1
+cmd="$(join_by _ "$@")"
+if [[ -n $cmd ]]; then
+  "$cmd"
+else
+  help
+fi
 

@@ -10,6 +10,16 @@ PLIST_LINK="$LAUNCH_AGENTS/ss-local.plist"
 KCPTUN_PLIST="$I_CONFIG_DIR/kcptun-client.plist"
 KCPTUN_PLIST_LINK="$LAUNCH_AGENTS/kcptun-client.plist"
 
+help() {
+  cat << EOF
+supported commands:
+  install
+  install server
+  install config
+  uninstall
+EOF
+}
+
 install() {
   link_file .config/shadowsocks/
   link_file .bin/ssc.svc
@@ -165,23 +175,10 @@ uninstall() {
   fi
 }
 
-case "$1" in
-  -i|--install|i|install)
-    if [[ -n $2 ]]; then
-      _name="$2"
-      shift 2
-      "install_${_name}" "$@"
-    else
-      install
-    fi
-    ;;
-  -u|--uninstall|u|uninstall)
-    uninstall
-    ;;
-  *)
-    echo "nothing to do ..."
-    exit 1
-esac
-
-exit 0
+cmd="$(join_by _ "$@")"
+if [[ -n $cmd ]]; then
+  "$cmd"
+else
+  help
+fi
 
