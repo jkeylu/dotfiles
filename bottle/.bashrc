@@ -2,7 +2,7 @@
 
 # WSL
 if [[ -f /proc/version ]]; then
-  if [[ cat /proc/version | grep --silent 'Microsoft' ]]; then
+  if cat /proc/version | grep --silent 'Microsoft'; then
     if [[ -t 1 ]]; then
       exec zsh
     fi
