@@ -39,8 +39,8 @@ download() {
 install() {
   download
 
-  tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 --include '*frpc'
-  tar zxvf "${TMPDIR}${dl_filename}" -C "$I_CONFIG_DIR" --strip-components 1 --include '*frpc*.ini'
+  tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 '*frpc'
+  tar zxvf "${TMPDIR}${dl_filename}" -C "$I_CONFIG_DIR" --strip-components 1 '*frpc*.ini'
 }
 
 _install_service() {
@@ -73,8 +73,8 @@ install_service() {
 install_server() {
   download
 
-  tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 --include '*frps'
-  tar zxvf "${TMPDIR}${dl_filename}" -C "$I_CONFIG_DIR" --strip-components 1 --include '*frps*.ini'
+  tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 '*frps'
+  tar zxvf "${TMPDIR}${dl_filename}" -C "$I_CONFIG_DIR" --strip-components 1 '*frps*.ini'
 }
 
 install_server_service() {
