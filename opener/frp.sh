@@ -23,7 +23,7 @@ download() {
   elif [[ $OS == 'Linux' ]]; then
     if uname -i | grep --silent '64'; then
       dl_filename="frp_${version}_linux_amd64.tar.gz"
-    elif uname -i | grep --slient '86'; then
+    elif uname -i | grep --silent '86'; then
       dl_filename="frp_${version}_linux_386.tar.gz"
     fi
   fi
