@@ -116,9 +116,27 @@ init_work_dir() {
   [[ -d $I_CACHE_DIR ]] || mkdir "$I_CACHE_DIR"
 }
 
+# http://stackoverflow.com/questions/1527049/join-elements-of-an-array
 join_by() {
   local IFS="$1"
   shift
   echo "$*"
 }
 
+gh_latest_tag() {
+  local repo="$1"
+  local version="$(curl -is https://github.com/${repo}/releases/latest | sed -n 's|^Location:.*/tag/\(.*\)$|\1|p' | tr -d '\r\n')"
+  echo "$version"
+}
+
+gh_download() {
+  local repo="$1"
+  local version="$2"
+  local filename="$3"
+
+  local url="https://github.com/${repo}/releases/download/${version}/${filename}"
+  local download_path="${TMPDIR}${filename}"
+
+  echo $url
+  curl -L --output "$download_path" "$url"
+}
