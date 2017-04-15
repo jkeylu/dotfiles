@@ -50,9 +50,12 @@ _install_service() {
 
   if [[ $OS == 'Darwin' ]]; then
     echo "Not Implement"
+
   else
-    local file_path="/usr/lib/systemd/system/${name}.service"
-    sudo cat > "$file_path" << EOF
+
+    if command_exist systemctl; then
+      local file_path="/usr/lib/systemd/system/${name}.service"
+      sudo cat > "$file_path" << EOF
 [Unit]
 Description=frp
 
@@ -63,6 +66,67 @@ ExecStart=${bin_file} -c ${config_file}
 [Install]
 WantedBy=multi-user.target
 EOF
+
+    else
+      local file_path="/etc/init.d/frpd"
+      local bin_file="$BIN_DIR/${name}"
+      local config_file="$I_CONFIG_DIR/${name}.ini"
+
+      sudo cat > "$file_path" << EOF
+#!/bin/bash
+#
+# frpd    Start up the frp
+#
+# chkconfig: 2345 20 80
+# description: A fast reverse proxy to help you expose a local server behind a NAT or firewall to the internet.
+
+# Source function library.
+. /etc/init.d/functions
+
+prog="frpd"
+lockfile=/var/lock/subsys/\$prog
+
+start() {
+	echo -n "Starting \$prog: "
+	daemon $bin_file -c $config_file
+    retval=\$?
+    echo
+    [ \$retval -eq 0 ] && touch \$lockfile
+    return \$retval
+}
+
+stop() {
+	echo -n "Shutting down \$prog: "
+    retval=\$?
+    echo
+    [ \$retval -eq 0 ] && rm -f \$lockfile
+    return \$retval
+}
+
+case "$1" in
+    start)
+	start
+	;;
+    stop)
+	stop
+	;;
+    status)
+    echo "nothing"
+	;;
+    restart|reload)
+    stop
+	start
+	;;
+    *)
+	echo "Usage: <servicename> {start|stop|status|reload|restart[|probe]"
+	exit 1
+	;;
+esac
+
+exit \$?
+EOF
+    fi
+
   fi
 }
 
