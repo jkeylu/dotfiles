@@ -2,19 +2,21 @@
 
 __dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+USER_HOME="$(dirname $__dir)"
+
 BOTTLE_DIR="$__dir/bottle"
 OPENER_DIR="$__dir/opener"
 
-CONFIG_DIR="$HOME/.config"
+CONFIG_DIR="$USER_HOME/.config"
 [[ -d $CONFIG_DIR ]] || mkdir "$CONFIG_DIR"
 
-BIN_DIR="$HOME/.bin"
+BIN_DIR="$USER_HOME/.bin"
 [[ -d $BIN_DIR ]] || mkdir "$BIN_DIR"
 
-CACHE_DIR="$HOME/.cache"
+CACHE_DIR="$USER_HOME/.cache"
 [[ -d $CACHE_DIR ]] || mkdir "$CACHE_DIR"
 
-BACKUP_DIR="$HOME/.dotfiles.bak"
+BACKUP_DIR="$USER_HOME/.dotfiles.bak"
 [[ -d $BACKUP_DIR ]] || mkdir "$BACKUP_DIR"
 
 OS=`uname`
@@ -39,7 +41,7 @@ command_exist() {
 
 backup() {
   local name="$1"
-  local source_file="$HOME/$name"
+  local source_file="$USER_HOME/$name"
   local dest_file="$BACKUP_DIR/$name"
   local bak_dir="$BACKUP_DIR"
 
@@ -66,7 +68,7 @@ link_file() {
   fi
 
   local bottle_file="$BOTTLE_DIR/$name"
-  local link_name="$HOME/$name"
+  local link_name="$USER_HOME/$name"
 
   if [[ -L $link_name ]]; then
     if [[ $(readlink "$link_name") = $bottle_file ]]; then
@@ -88,7 +90,7 @@ restore_file() {
   fi
 
   local bak_file="$BACKUP_DIR/$name"
-  local origin_file="$HOME/$name"
+  local origin_file="$USER_HOME/$name"
   local bottle_file="$BOTTLE_DIR/$name"
 
   if [[ ! -L $origin_file ]]; then
