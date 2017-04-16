@@ -138,9 +138,9 @@ EOF
       chmod +x "$file_path"
 
       if command_exist update-rc.d; then
-        update-rc.d frpd enable
+        update-rc.d $name enable
       else
-        chkconfig --add frpd
+        chkconfig --add $name
       fi
 
     fi
