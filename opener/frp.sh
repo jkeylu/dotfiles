@@ -119,7 +119,7 @@ case "\$1" in
     stop
     ;;
   status)
-    status -p $pidfile -l $prog $exec
+    status -p \$pidfile -l \$prog \$exec
     ;;
   restart|reload)
     stop
