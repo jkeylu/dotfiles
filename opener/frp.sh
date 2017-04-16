@@ -87,10 +87,12 @@ EOF
 
 prog="frpd"
 lockfile=/var/lock/subsys/\$prog
+pidfile=/var/run/\$prog
 
 start() {
 	echo -n "Starting \$prog: "
 	daemon $bin_file -c $config_file > /dev/null 2>&1 &
+	echo $! > "\$pidfile"
     retval=\$?
     echo
     [ \$retval -eq 0 ] && touch \$lockfile
@@ -99,6 +101,8 @@ start() {
 
 stop() {
 	echo -n "Shutting down \$prog: "
+	kill `cat \$pidfile`
+	rm \$pidfile
     retval=\$?
     echo
     [ \$retval -eq 0 ] && rm -f \$lockfile
