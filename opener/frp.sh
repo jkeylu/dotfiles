@@ -104,7 +104,7 @@ start() {
 
 stop() {
   echo -n "Shutting down \$prog: "
-  killproc -p \$pidfile \$exec -INT
+  killproc -p \$pidfile \$exec
   retval=\$?
   echo
   [ \$retval -eq 0 ] && rm -f \$lockfile
