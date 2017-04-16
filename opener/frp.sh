@@ -23,10 +23,12 @@ download() {
   if [[ $OS == 'Darwin' ]]; then
     dl_filename="frp_${version}_darwin_amd64.tar.gz"
   elif [[ $OS == 'Linux' ]]; then
-    if uname -i | grep --silent '64'; then
+    if uname -m | grep --silent '64'; then
       dl_filename="frp_${version}_linux_amd64.tar.gz"
-    elif uname -i | grep --silent '86'; then
+    elif uname -m | grep --silent '86'; then
       dl_filename="frp_${version}_linux_386.tar.gz"
+    else uname -m | grep --silent 'arm'; then
+      dl_filename="frp_${version}_linux_arm.tar.gz"
     fi
   fi
 
