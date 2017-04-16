@@ -50,8 +50,8 @@ install() {
 _install_service() {
   local name="$1"
   local bin_file="$BIN_DIR/$name"
-  local config_file="$I_CONFIG_DIR/${name}.ini"
-  local log_file="$I_CACHE_DIR/${name}.log"
+  local config_file="$I_CONFIG_DIR/$name.ini"
+  local log_file="$I_CACHE_DIR/$name.log"
 
   if [[ $OS == 'Darwin' ]]; then
     echo "Not Implement"
@@ -59,13 +59,13 @@ _install_service() {
   else
 
     if command_exist systemctl; then
-      local file_path="/usr/lib/systemd/system/${name}.service"
+      local file_path="/usr/lib/systemd/system/$name.service"
       sudo cat > "$file_path" << EOF
 [Unit]
 Description=frp
 
 [Service]
-Type=forking
+Type=simple
 ExecStart=$bin_file -c $config_file -L $log_file
 
 [Install]
