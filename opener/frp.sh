@@ -74,7 +74,7 @@ EOF
       local bin_file="$BIN_DIR/${name}"
       local config_file="$I_CONFIG_DIR/${name}.ini"
 
-      sudo cat > "$file_path" << EOF
+      cat > "$file_path" << EOF
 #!/bin/bash
 #
 # frpd    Start up the frp
@@ -92,7 +92,7 @@ pidfile=/var/run/\$prog
 start() {
 	echo -n "Starting \$prog: "
 	daemon $bin_file -c $config_file > /dev/null 2>&1 &
-	echo $! > "\$pidfile"
+	echo \$! > "\$pidfile"
     retval=\$?
     echo
     [ \$retval -eq 0 ] && touch \$lockfile
@@ -101,7 +101,7 @@ start() {
 
 stop() {
 	echo -n "Shutting down \$prog: "
-	kill `cat \$pidfile`
+    kill "\$(cat \$pidfile)"
 	rm \$pidfile
     retval=\$?
     echo
