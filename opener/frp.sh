@@ -74,6 +74,7 @@ EOF
       local bin_file="$BIN_DIR/${name}"
       local config_file="$I_CONFIG_DIR/${name}.ini"
 
+      # https://gist.github.com/blalor/c325d500818361e28daf
       cat > "$file_path" << EOF
 #!/bin/bash
 #
@@ -85,48 +86,49 @@ EOF
 # Source function library.
 . /etc/init.d/functions
 
-prog="frpd"
+prog=frpd
+exec=$bin_file
 lockfile=/var/lock/subsys/\$prog
-pidfile=/var/run/\$prog
+pidfile=/var/run/\$prog.pid
+logfile=/var/log/\$prog
+conffile=$config_file
 
 start() {
-	echo -n "Starting \$prog: "
-	daemon $bin_file -c $config_file > /dev/null 2>&1 &
-	echo \$! > "\$pidfile"
-    retval=\$?
-    echo
-    [ \$retval -eq 0 ] && touch \$lockfile
-    return \$retval
+  echo -n "Starting \$prog: "
+  daemon --pidfile=\$pidfile " { \$exec -c \$conffile &>> \$logfile & } ; echo \\\$! >| \$pidfile "
+  retval=\$?
+  echo
+  [ \$retval -eq 0 ] && touch \$lockfile
+  return \$retval
 }
 
 stop() {
-	echo -n "Shutting down \$prog: "
-    kill "\$(cat \$pidfile)"
-	rm \$pidfile
-    retval=\$?
-    echo
-    [ \$retval -eq 0 ] && rm -f \$lockfile
-    return \$retval
+  echo -n "Shutting down \$prog: "
+  killproc -p \$pidfile \$exec -INT
+  retval=\$?
+  echo
+  [ \$retval -eq 0 ] && rm -f \$lockfile
+  return \$retval
 }
 
 case "\$1" in
-    start)
-	start
-	;;
-    stop)
-	stop
-	;;
-    status)
-    echo "nothing"
-	;;
-    restart|reload)
+  start)
+    start
+    ;;
+  stop)
     stop
-	start
-	;;
-    *)
-	echo "Usage: \$prog {start|stop|status|reload|restart"
-	exit 1
-	;;
+    ;;
+  status)
+    status -p $pidfile -l $prog $exec
+    ;;
+  restart|reload)
+    stop
+    start
+    ;;
+  *)
+    echo "Usage: \$prog {start|stop|status|reload|restart"
+    exit 1
+    ;;
 esac
 
 exit \$?
