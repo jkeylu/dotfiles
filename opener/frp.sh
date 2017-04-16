@@ -27,7 +27,7 @@ download() {
       dl_filename="frp_${version}_linux_amd64.tar.gz"
     elif uname -m | grep --silent '86'; then
       dl_filename="frp_${version}_linux_386.tar.gz"
-    else uname -m | grep --silent 'arm'; then
+    elif uname -m | grep --silent 'arm'; then
       dl_filename="frp_${version}_linux_arm.tar.gz"
     fi
   fi
@@ -51,6 +51,7 @@ _install_service() {
   local name="$1"
   local bin_file="$BIN_DIR/$name"
   local config_file="$I_CONFIG_DIR/${name}.ini"
+  local log_file="$I_CACHE_DIR/${name}.log"
 
   if [[ $OS == 'Darwin' ]]; then
     echo "Not Implement"
@@ -65,16 +66,14 @@ Description=frp
 
 [Service]
 Type=forking
-ExecStart=${bin_file} -c ${config_file}
+ExecStart=$bin_file -c $config_file -L $log_file
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
     else
-      local file_path="/etc/init.d/frpd"
-      local bin_file="$BIN_DIR/${name}"
-      local config_file="$I_CONFIG_DIR/${name}.ini"
+      local file_path="/etc/init.d/$name"
 
       # https://gist.github.com/blalor/c325d500818361e28daf
       cat > "$file_path" << EOF
@@ -88,16 +87,16 @@ EOF
 # Source function library.
 . /etc/init.d/functions
 
-prog=frpd
+prog=$name
 exec=$bin_file
 lockfile=/var/lock/subsys/\$prog
 pidfile=/var/run/\$prog.pid
-logfile=/var/log/\$prog
+logfile=$log_file
 conffile=$config_file
 
 start() {
   echo -n "Starting \$prog: "
-  daemon --pidfile=\$pidfile " { \$exec -c \$conffile &>> \$logfile & } ; echo \\\$! >| \$pidfile "
+  daemon --pidfile=\$pidfile " { \$exec -c \$conffile -L \$logfile & } ; echo \\\$! >| \$pidfile "
   retval=\$?
   echo
   [ \$retval -eq 0 ] && touch \$lockfile
