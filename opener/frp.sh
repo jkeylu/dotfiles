@@ -8,7 +8,9 @@ help() {
   cat << EOF
 supported commands:
   install
+  install service
   install server
+  install server service
 EOF
 }
 
@@ -88,7 +90,7 @@ lockfile=/var/lock/subsys/\$prog
 
 start() {
 	echo -n "Starting \$prog: "
-	daemon $bin_file -c $config_file
+	daemon $bin_file -c $config_file > /dev/null 2>&1 &
     retval=\$?
     echo
     [ \$retval -eq 0 ] && touch \$lockfile
@@ -103,7 +105,7 @@ stop() {
     return \$retval
 }
 
-case "$1" in
+case "\$1" in
     start)
 	start
 	;;
@@ -118,13 +120,22 @@ case "$1" in
 	start
 	;;
     *)
-	echo "Usage: <servicename> {start|stop|status|reload|restart[|probe]"
+	echo "Usage: \$prog {start|stop|status|reload|restart"
 	exit 1
 	;;
 esac
 
 exit \$?
 EOF
+
+      chmod +x "$file_path"
+
+      if command_exist update-rc.d; then
+        update-rc.d frpd enable
+      else
+        chkconfig --add frpd
+      fi
+
     fi
 
   fi
