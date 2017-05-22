@@ -2,7 +2,7 @@
 {
     "editor.fontFamily": "Monaco",
     "editor.rulers": [80],
-    "editor.renderWhitespace": true,
+    "editor.renderWhitespace": "boundary",
     "files.trimTrailingWhitespace": true,
     "typescript.check.tscVersion": false
 }
