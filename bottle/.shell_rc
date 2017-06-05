@@ -1,10 +1,10 @@
 # User configuration
 
-if [[ -z $(echo "$PATH" | grep '\(^\|[^\w]\)/usr/local/bin\([^/]\|$\)') ]]; then
+if [[ ":$PATH:" != *":/usr/local/bin:"* ]]; then
   export PATH=/usr/local/bin:$PATH
 fi
 
-if [[ -z $(echo $PATH | grep "$HOME/bin") ]]; then
+if [[ ":$PATH:" != *":$HOME/bin:"* ]]; then
   export PATH=$HOME/bin:$PATH
 fi
 
@@ -75,6 +75,11 @@ fi
 # go
 export GOPATH=$HOME/Projects/gocode
 export PATH=$GOPATH/bin:$PATH
+
+# rust
+if [[ -d $HOME/.cargo ]]; then
+  export PATH=$HOME/.cargo/bin:$PATH
+fi
 
 # electron
 export ELECTRON_MIRROR=http://npm.taobao.org/mirrors/electron/
