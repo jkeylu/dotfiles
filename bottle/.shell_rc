@@ -72,9 +72,18 @@ if [[ -f $NVM_DIR/alias/default ]]; then
   fi
 fi
 
+# python
+if command -v python3 &> /dev/null; then
+  export PATH="$(python3 -m site --user-base)/bin:$PATH"
+else
+  export PATH="$(python -m site --user-base)/bin:$PATH"
+fi
+
 # go
-export GOPATH=$HOME/Projects/gocode
-export PATH=$GOPATH/bin:$PATH
+if command -v go &> /dev/null; then
+  export GOPATH=$HOME/Projects/gocode
+  export PATH=$GOPATH/bin:$PATH
+fi
 
 # rust
 if [[ -d $HOME/.cargo ]]; then
