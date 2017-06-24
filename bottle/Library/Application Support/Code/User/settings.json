@@ -4,5 +4,6 @@
     "editor.rulers": [80],
     "editor.renderWhitespace": "boundary",
     "files.trimTrailingWhitespace": true,
-    "typescript.check.tscVersion": false
+    "typescript.check.tscVersion": false,
+    "window.zoomLevel": 0
 }
