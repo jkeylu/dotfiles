@@ -29,5 +29,13 @@
         "key": "cmd+k `",
         "command": "workbench.action.terminal.focusNext",
         "when": "terminalFocus"
+    },
+    {
+        "key": "shift+alt+u",
+        "command": "editor.action.transformToUppercase"
+    },
+    {
+        "key": "shift+alt+l",
+        "command": "editor.action.transformToLowercase"
     }
 ]
