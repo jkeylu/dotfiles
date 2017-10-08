@@ -48,4 +48,12 @@ nvm() {
   fi
 }
 
+try_attach_tmux() {
+  if ! tmux ls &> /dev/null; then
+    tmux new -s Default
+  elif ! tmux ls | grep --quiet '(attached)'; then
+    tmux attach -t Default || tmux new -s Default
+  fi
+}
+
 # vim:ft=sh et ts=2 sw=2 sts=2

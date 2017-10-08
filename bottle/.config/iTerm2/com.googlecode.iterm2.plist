@@ -129,11 +129,13 @@
 		<integer>1</integer>
 	</dict>
 	<key>NSWindow Frame SUUpdateAlert</key>
-	<string>410 383 620 392 0 0 1440 877 </string>
+	<string>410 363 620 392 0 0 1440 877 </string>
+	<key>NSWindow Frame SessionsPreferences</key>
+	<string>269 94 599 501 0 0 1440 877 </string>
 	<key>NSWindow Frame SharedPreferences</key>
-	<string>507 233 796 473 0 0 1440 877 </string>
+	<string>486 192 796 473 0 0 1440 877 </string>
 	<key>NSWindow Frame iTerm Window 0</key>
-	<string>0 425 1326 452 0 0 1440 877 </string>
+	<string>0 80 1326 797 0 0 1440 877 </string>
 	<key>New Bookmarks</key>
 	<array>
 		<dict>
@@ -383,7 +385,7 @@
 			<key>Idle Code</key>
 			<integer>0</integer>
 			<key>Initial Text</key>
-			<string></string>
+			<string>try_attach_tmux</string>
 			<key>Jobs to Ignore</key>
 			<array>
 				<string>rlogin</string>
@@ -946,7 +948,7 @@
 	<key>SUHasLaunchedBefore</key>
 	<true/>
 	<key>SULastCheckTime</key>
-	<date>2017-09-29T11:38:30Z</date>
+	<date>2017-10-08T12:11:12Z</date>
 	<key>SUSendProfileInfo</key>
 	<false/>
 	<key>SavePasteHistory</key>
@@ -1004,6 +1006,6 @@
 	<key>findRegex_iTerm</key>
 	<false/>
 	<key>iTerm Version</key>
-	<string>3.1.3.beta.1</string>
+	<string>3.1.4.beta.1</string>
 </dict>
 </plist>
