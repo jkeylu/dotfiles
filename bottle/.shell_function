@@ -48,7 +48,7 @@ nvm() {
   fi
 }
 
-try_attach_tmux() {
+itmux() {
   if ! tmux ls &> /dev/null; then
     tmux new -s Default
   elif ! tmux ls | grep --quiet '(attached)'; then

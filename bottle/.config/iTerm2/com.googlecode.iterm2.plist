@@ -133,7 +133,7 @@
 	<key>NSWindow Frame SessionsPreferences</key>
 	<string>269 94 599 501 0 0 1440 877 </string>
 	<key>NSWindow Frame SharedPreferences</key>
-	<string>486 192 796 473 0 0 1440 877 </string>
+	<string>486 181 796 473 0 0 1440 877 </string>
 	<key>NSWindow Frame iTerm Window 0</key>
 	<string>0 80 1326 797 0 0 1440 877 </string>
 	<key>New Bookmarks</key>
@@ -385,7 +385,7 @@
 			<key>Idle Code</key>
 			<integer>0</integer>
 			<key>Initial Text</key>
-			<string>try_attach_tmux</string>
+			<string>itmux</string>
 			<key>Jobs to Ignore</key>
 			<array>
 				<string>rlogin</string>
