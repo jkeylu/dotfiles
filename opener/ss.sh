@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
+source "$HOME/.dotfiles/util.sh"
 
 init_work_dir shadowsocks
 
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
-PLIST="$I_CONFIG_DIR/ss-local.plist"
+PLIST="$MY_CONFIG_DIR/ss-local.plist"
 PLIST_LINK="$LAUNCH_AGENTS/ss-local.plist"
-KCPTUN_PLIST="$I_CONFIG_DIR/kcptun-client.plist"
+KCPTUN_PLIST="$MY_CONFIG_DIR/kcptun-client.plist"
 KCPTUN_PLIST_LINK="$LAUNCH_AGENTS/kcptun-client.plist"
 
 help() {
@@ -62,9 +62,9 @@ install() {
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>${I_CACHE_DIR}/kcptun-client.stdout</string>
+    <string>${MY_CACHE_DIR}/kcptun-client.stdout</string>
     <key>StandardErrorPath</key>
-    <string>${I_CACHE_DIR}/kcptun-client.stderr</string>
+    <string>${MY_CACHE_DIR}/kcptun-client.stderr</string>
     </dict>
 </plist>
 EOF
@@ -95,9 +95,9 @@ EOF
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>${I_CACHE_DIR}/ss-local.stdout</string>
+    <string>${MY_CACHE_DIR}/ss-local.stdout</string>
     <key>StandardErrorPath</key>
-    <string>${I_CACHE_DIR}/ss-local.stderr</string>
+    <string>${MY_CACHE_DIR}/ss-local.stderr</string>
     </dict>
 </plist>
 EOF
@@ -136,10 +136,10 @@ install_server() {
 }
 
 install_config() {
-  local config_file="$I_CONFIG_DIR/config.json"
+  local config_file="$MY_CONFIG_DIR/config.json"
 
   if [[ -n $1 ]]; then
-    config_file="$I_CONFIG_DIR/${1}.config.json"
+    config_file="$MY_CONFIG_DIR/${1}.config.json"
   fi
 
   if [[ -f $config_file ]]; then
@@ -175,10 +175,5 @@ uninstall() {
   fi
 }
 
-cmd="$(join_by _ "$@")"
-if [[ -n $cmd ]]; then
-  "$cmd"
-else
-  help
-fi
+run_cmd "$@"
 

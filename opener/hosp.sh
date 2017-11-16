@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
+source "$HOME/.dotfiles/util.sh"
 
 init_work_dir hosp
 
@@ -15,9 +15,9 @@ install() {
   link_file .config/hosp/
 
   local launch_agents="$HOME/Library/LaunchAgents"
-  local plist="$I_CONFIG_DIR/hosp.plist"
+  local plist="$MY_CONFIG_DIR/hosp.plist"
   local plist_link="$launch_agents/hosp.plist"
-  local whitelist="$I_CONFIG_DIR/whitelist.txt"
+  local whitelist="$MY_CONFIG_DIR/whitelist.txt"
   local url="https://github.com/jkeylu/hosp/releases/download/v1.1.0/hosp-macosx-amd64-v1.1.0.tar.gz"
   local download_path="${TMPDIR}hosp.tar.gz"
 
@@ -58,9 +58,9 @@ install() {
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>${I_CACHE_DIR}/hosp.stdout</string>
+    <string>${MY_CACHE_DIR}/hosp.stdout</string>
     <key>StandardErrorPath</key>
-    <string>${I_CACHE_DIR}/hosp.stderr</string>
+    <string>${MY_CACHE_DIR}/hosp.stderr</string>
   </dict>
 </plist>
 EOF
@@ -79,10 +79,5 @@ EOF
   fi
 }
 
-cmd="$(join_by _ "$@")"
-if [[ -n $cmd ]]; then
-  "$cmd"
-else
-  help
-fi
+run_cmd "$@"
 

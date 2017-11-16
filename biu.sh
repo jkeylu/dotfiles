@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/util.sh"
+source "$HOME/.dotfiles/util.sh"
 
 show_usage() {
   cat << EOF
-usage: ./biu.sh [option] name
+usage: ./.dotfiles/biu.sh [option] name
 
 option:
   -l list all dotfiles that can be installed

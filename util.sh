@@ -1,22 +1,20 @@
 #!/usr/bin/env bash
 
-__dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTFILES_DIR="$HOME/.dotfiles"
 
-USER_HOME="$(dirname $__dir)"
+BOTTLE_DIR="$DOTFILES_DIR/bottle"
+OPENER_DIR="$DOTFILES_DIR/opener"
 
-BOTTLE_DIR="$__dir/bottle"
-OPENER_DIR="$__dir/opener"
-
-CONFIG_DIR="$USER_HOME/.config"
+CONFIG_DIR="$HOME/.config"
 [[ -d $CONFIG_DIR ]] || mkdir "$CONFIG_DIR"
 
-BIN_DIR="$USER_HOME/.bin"
+BIN_DIR="$HOME/.bin"
 [[ -d $BIN_DIR ]] || mkdir "$BIN_DIR"
 
-CACHE_DIR="$USER_HOME/.cache"
+CACHE_DIR="$HOME/.cache"
 [[ -d $CACHE_DIR ]] || mkdir "$CACHE_DIR"
 
-BACKUP_DIR="$USER_HOME/.dotfiles.bak"
+BACKUP_DIR="$HOME/.dotfiles.bak"
 [[ -d $BACKUP_DIR ]] || mkdir "$BACKUP_DIR"
 
 OS=`uname`
@@ -41,7 +39,7 @@ command_exist() {
 
 backup() {
   local name="$1"
-  local source_file="$USER_HOME/$name"
+  local source_file="$HOME/$name"
   local dest_file="$BACKUP_DIR/$name"
   local bak_dir="$BACKUP_DIR"
 
@@ -68,7 +66,7 @@ link_file() {
   fi
 
   local bottle_file="$BOTTLE_DIR/$name"
-  local link_name="$USER_HOME/$name"
+  local link_name="$HOME/$name"
 
   if [[ -L $link_name ]]; then
     if [[ $(readlink "$link_name") = $bottle_file ]]; then
@@ -90,7 +88,7 @@ restore_file() {
   fi
 
   local bak_file="$BACKUP_DIR/$name"
-  local origin_file="$USER_HOME/$name"
+  local origin_file="$HOME/$name"
   local bottle_file="$BOTTLE_DIR/$name"
 
   if [[ ! -L $origin_file ]]; then
@@ -111,11 +109,11 @@ restore_file() {
 }
 
 init_work_dir() {
-  I_CONFIG_DIR="$CONFIG_DIR/$1"
-  I_CACHE_DIR="$CACHE_DIR/$1"
+  MY_CONFIG_DIR="$CONFIG_DIR/$1"
+  MY_CACHE_DIR="$CACHE_DIR/$1"
 
-  [[ -d $I_CONFIG_DIR ]] || mkdir "$I_CONFIG_DIR"
-  [[ -d $I_CACHE_DIR ]] || mkdir "$I_CACHE_DIR"
+  [[ -d $MY_CONFIG_DIR ]] || mkdir "$MY_CONFIG_DIR"
+  [[ -d $MY_CACHE_DIR ]] || mkdir "$MY_CACHE_DIR"
 }
 
 # http://stackoverflow.com/questions/1527049/join-elements-of-an-array
@@ -142,3 +140,13 @@ gh_download() {
   echo $url
   curl -L --output "$download_path" "$url"
 }
+
+run_cmd() {
+  local cmd="$(join_by _ "$@")"
+  if [[ -n $cmd ]]; then
+    "$cmd"
+  else
+    help
+  fi
+}
+

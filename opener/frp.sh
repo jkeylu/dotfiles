@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
+source "$HOME/.dotfiles/util.sh"
 
 init_work_dir frp
 
@@ -44,14 +44,14 @@ install() {
   download
 
   tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 '*frpc'
-  tar zxvf "${TMPDIR}${dl_filename}" -C "$I_CONFIG_DIR" --strip-components 1 '*frpc*.ini'
+  tar zxvf "${TMPDIR}${dl_filename}" -C "$MY_CONFIG_DIR" --strip-components 1 '*frpc*.ini'
 }
 
 _install_service() {
   local name="$1"
   local bin_file="$BIN_DIR/$name"
-  local config_file="$I_CONFIG_DIR/$name.ini"
-  local log_file="$I_CACHE_DIR/$name.log"
+  local config_file="$MY_CONFIG_DIR/$name.ini"
+  local log_file="$MY_CACHE_DIR/$name.log"
 
   if [[ $OS == 'Darwin' ]]; then
     echo "Not Implement"
@@ -156,17 +156,12 @@ install_server() {
   download
 
   tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 '*frps'
-  tar zxvf "${TMPDIR}${dl_filename}" -C "$I_CONFIG_DIR" --strip-components 1 '*frps*.ini'
+  tar zxvf "${TMPDIR}${dl_filename}" -C "$MY_CONFIG_DIR" --strip-components 1 '*frps*.ini'
 }
 
 install_server_service() {
   _install_service frps
 }
 
-cmd="$(join_by _ "$@")"
-if [[ -n $cmd ]]; then
-  "$cmd"
-else
-  help
-fi
+run_cmd "$@"
 

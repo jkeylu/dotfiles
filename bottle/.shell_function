@@ -56,4 +56,32 @@ itmux() {
   fi
 }
 
+if [[ $(uname -s) = "Darwin" ]]; then
+  mynetworksetup() {
+    case "$1" in
+      list)
+        networksetup -listnetworkserviceorder
+        ;;
+      getsp)
+        networksetup -getsocksfirewallproxy "$2"
+        ;;
+      setsp)
+        networksetup -setsocksfirewallproxy "$2" "$3" "$4"
+        ;;
+      togglespstate)
+        if networksetup -getsocksfirewallproxy "$2" | grep --quiet 'Enabled: Yes'; then
+          networksetup -setsocksfirewallproxystate "$2" off
+        else
+          networksetup -setsocksfirewallproxystate "$2" on
+        fi
+        echo 'Change state to:'
+        networksetup -getsocksfirewallproxy "$2" | grep '^Enabled:'
+        ;;
+      *)
+        echo "mynetworksetup list|getsp|setsp|togglespstate"
+        ;;
+    esac
+  }
+fi
+
 # vim:ft=sh et ts=2 sw=2 sts=2

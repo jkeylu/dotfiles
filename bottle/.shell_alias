@@ -9,6 +9,9 @@ alias myip="curl --silent ifconfig.me"
 alias start_mongod="mongod --config /usr/local/etc/mongod.conf"
 alias start_elasticsearch="elasticsearch --config=/usr/local/opt/elasticsearch/config/elasticsearch.yml"
 
+# dotfiles/biu.sh
+alias dotfilebiu="~/.dotfiles/biu.sh"
+
 # vim
 alias v="vim --cmd \"let g:custom_env = ['zmlearn']\""
 alias nv="nvim --cmd \"let g:custom_env = ['zmlearn']\""

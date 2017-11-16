@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../util.sh"
+source "$HOME/.dotfiles/util.sh"
 
 help() {
   cat << EOF
@@ -18,10 +18,5 @@ install() {
   fi
 }
 
-cmd="$(join_by _ "$@")"
-if [[ -n $cmd ]]; then
-  "$cmd"
-else
-  help
-fi
+run_cmd "$@"
 
