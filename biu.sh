@@ -75,7 +75,7 @@ case "$1" in
     uninstall "$@"
     exit 0
     ;;
-  -x|x)
+  -x|x|run)
     shift
     x "$@"
     exit 0
