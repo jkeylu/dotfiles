@@ -10,15 +10,20 @@ EOF
 }
 
 install() {
-  if [[ -e "$BIN_DIR/kcptun-client" ]]; then
-    log "kcptun already installed"
-    exit 0
+  if [[ -f "$BIN_DIR/.kcptun.version" ]]; then
+    local current_version="$(cat "$BIN_DIR/.kcptun.version")"
+    log "current version: $current_version"
   fi
 
   log get latest version...
   local version="$(curl -is https://github.com/xtaci/kcptun/releases/latest | sed -n 's|^Location:.*/tag/v\([a-zA-Z0-9_-]*\).*$|\1|p')"
 
-  log "version: $version"
+  log "remote version: $version"
+
+  if [[ $version == $current_version ]]; then
+    log "$version is latest version"
+    exit 0
+  fi
 
   local name="$(echo $OS | tr '[:upper:]' '[:lower:]')"
   local filename="kcptun-${name}-386-${version}.tar.gz"
@@ -32,6 +37,7 @@ install() {
 
   mv "${BIN_DIR}/client_${name}_386" "${BIN_DIR}/kcptun-client"
   mv "${BIN_DIR}/server_${name}_386" "${BIN_DIR}/kcptun-server"
+  echo "$version" > "$BIN_DIR/.kcptun.version"
 }
 
 run_cmd "$@"
