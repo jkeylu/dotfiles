@@ -10,8 +10,8 @@ EOF
 }
 
 install() {
-  if [[ -f "$BIN_DIR/.kcptun.version" ]]; then
-    local current_version="$(cat "$BIN_DIR/.kcptun.version")"
+  if [[ -x "$BIN_DIR/kcptun-client" ]]; then
+    local current_version="$($BIN_DIR/kcptun-client --version | grep -o '[0-9]\{8\}')"
     log "current version: $current_version"
   fi
 

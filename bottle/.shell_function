@@ -59,16 +59,16 @@ itmux() {
 if [[ $(uname -s) = "Darwin" ]]; then
   mynetworksetup() {
     case "$1" in
-      list)
+      ls)
         networksetup -listnetworkserviceorder
         ;;
-      getsp)
+      getsfp)
         networksetup -getsocksfirewallproxy "$2"
         ;;
-      setsp)
+      setsfp)
         networksetup -setsocksfirewallproxy "$2" "$3" "$4"
         ;;
-      togglespstate)
+      tgsfp)
         if networksetup -getsocksfirewallproxy "$2" | grep --quiet 'Enabled: Yes'; then
           networksetup -setsocksfirewallproxystate "$2" off
         else
@@ -78,7 +78,7 @@ if [[ $(uname -s) = "Darwin" ]]; then
         networksetup -getsocksfirewallproxy "$2" | grep '^Enabled:'
         ;;
       *)
-        echo "mynetworksetup list|getsp|setsp|togglespstate"
+        echo "mynetworksetup ls|getsfp|setsfp|tgsfp"
         ;;
     esac
   }
