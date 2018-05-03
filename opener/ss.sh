@@ -15,7 +15,7 @@ help() {
 supported commands:
   install
   install server
-  install config
+  install config [name]
   uninstall
 EOF
 }
@@ -161,7 +161,11 @@ install_config() {
 }
 EOF
 
-  echo "vim $config_file"
+  if command_exist vim; then
+    vim "$config_file"
+  else
+    echo "vim $config_file"
+  fi
 }
 
 uninstall() {

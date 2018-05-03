@@ -12,6 +12,12 @@ option:
   -i install dotfiles
   -r restore dotfiles
   -h show this help message
+
+examples:
+
+./biu.sh -l
+./biu.sh -x zsh install
+./biu.sh -x ss - install_config hello
 EOF
 }
 

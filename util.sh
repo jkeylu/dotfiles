@@ -143,8 +143,15 @@ gh_download() {
 
 run_cmd() {
   local cmd="$(join_by _ "$@")"
-  if [[ -n $cmd ]]; then
-    "$cmd"
+
+  if [[ $1 = "-" ]]; then
+    cmd="$2"
+    shift 2
+    "$cmd" "$@"
+
+  elif [[ -n $cmd ]]; then
+    "$cmd" args
+
   else
     help
   fi
