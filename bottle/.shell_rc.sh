@@ -48,12 +48,12 @@ fi
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
-[[ -f ~/.shell_alias ]] && source ~/.shell_alias
-[[ -f ~/.shell_alias_private ]] && source ~/.shell_alias_private
+[[ -f ~/.shell_alias.sh ]] && source ~/.shell_alias.sh
+[[ -f ~/.shell_alias_private.sh ]] && source ~/.shell_alias_private.sh
 
 # shell functions
-[[ -f ~/.shell_function ]] && source ~/.shell_function
-[[ -f ~/.shell_function_private ]] && source ~/.shell_function_private
+[[ -f ~/.shell_function.sh ]] && source ~/.shell_function.sh
+[[ -f ~/.shell_function_private.sh ]] && source ~/.shell_function_private.sh
 
 # disable CTRL-D to close window
 set -o ignoreeof

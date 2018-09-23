@@ -37,5 +37,9 @@
     {
         "key": "shift+alt+l",
         "command": "editor.action.transformToLowercase"
+    },
+    {
+        "key": "cmd+k alt+right",
+        "command": "workbench.action.splitEditorRight"
     }
 ]

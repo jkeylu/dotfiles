@@ -15,9 +15,10 @@ option:
 
 examples:
 
-./biu.sh -l
-./biu.sh -x zsh install
-./biu.sh -x ss - install_config hello
+./biu.sh list
+./biu.sh install zsh
+./biu.sh run nvm update
+./biu.sh run ss - install_config hello
 EOF
 }
 

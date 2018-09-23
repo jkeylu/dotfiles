@@ -8,9 +8,9 @@ help() {
   cat << EOF
 supported commands:
   install
-  install service
-  install server
-  install server service
+  update
+  install_service [frpc|frps]
+  pm2config [frpc|frps]
 EOF
 }
 
@@ -44,14 +44,63 @@ install() {
   download
 
   tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 '*frpc'
-  tar zxvf "${TMPDIR}${dl_filename}" -C "$MY_CONFIG_DIR" --strip-components 1 '*frpc*.ini'
+  tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 '*frps'
+  tar zxvf "${TMPDIR}${dl_filename}" -C "$MY_CONFIG_DIR" --strip-components 1 '*frp*.ini'
 }
 
-_install_service() {
+update() {
+  if [[ -x "$BIN_DIR/frpc" ]]; then
+    log "current version: $($BIN_DIR/frpc --version)"
+  fi
+
+  download
+
+  tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 '*frpc'
+  tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 '*frps'
+}
+
+pm2config() {
+  local name="$1"
+  local bin_file="$BIN_DIR/$name"
+  local config_file="$MY_CONFIG_DIR/$name.ini"
+  local file_path="$MY_CONFIG_DIR/$name.config.js"
+
+  if [[ $# -eq 0 ]]; then
+    ls -l "$MY_CONFIG_DIR" | grep --color '[^ ]\+.config.js'
+    exit 0
+  fi
+
+  if [[ $name != "frpc" && $name != "frps" ]]; then
+    log only support frpc or frps
+    exit 1
+  fi
+
+  cat > "$file_path" << EOF
+module.exports = {
+  apps: [
+    {
+      name: '$name',
+      script: '$bin_file',
+      args: '-c $config_file',
+      log_date_format: 'YYMMDD HH:mm:ss Z'
+    }
+  ]
+}
+EOF
+
+  echo "RUN pm2 start $file_path"
+}
+
+install_service() {
   local name="$1"
   local bin_file="$BIN_DIR/$name"
   local config_file="$MY_CONFIG_DIR/$name.ini"
   local log_file="$MY_CACHE_DIR/$name.log"
+
+  if [[ $name != "frpc" || $name != "frps" ]]; then
+    log only support frpc or frps
+    exit 1
+  fi
 
   if [[ $OS == 'Darwin' ]]; then
     echo "Not Implement"
@@ -146,21 +195,6 @@ EOF
     fi
 
   fi
-}
-
-install_service() {
-  _install_service frpc
-}
-
-install_server() {
-  download
-
-  tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 '*frps'
-  tar zxvf "${TMPDIR}${dl_filename}" -C "$MY_CONFIG_DIR" --strip-components 1 '*frps*.ini'
-}
-
-install_server_service() {
-  _install_service frps
 }
 
 run_cmd "$@"

@@ -12,8 +12,6 @@ EOF
 }
 
 install() {
-  link_file .config/hosp/
-
   local launch_agents="$HOME/Library/LaunchAgents"
   local plist="$MY_CONFIG_DIR/hosp.plist"
   local plist_link="$launch_agents/hosp.plist"

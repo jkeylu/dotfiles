@@ -5,5 +5,13 @@
     "editor.fontFamily": "Monaco",
     "editor.rulers": [80],
     "editor.renderWhitespace": "boundary",
-    "files.trimTrailingWhitespace": true
+    "files.trimTrailingWhitespace": true,
+    "vetur.format.defaultFormatter.html": "js-beautify-html",
+    "vetur.format.defaultFormatter.js": "vscode-typescript",
+    "editor.quickSuggestions": {
+        "strings": true
+    },
+    "window.zoomLevel": 0,
+    "prettier.semi": true,
+    "prettier.singleQuote": true
 }

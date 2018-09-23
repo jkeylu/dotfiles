@@ -125,8 +125,8 @@ join_by() {
 
 gh_latest_tag() {
   local repo="$1"
-  local version="$(curl -is https://github.com/${repo}/releases/latest | sed -n 's|^Location:.*/tag/\(.*\)$|\1|p' | tr -d '\r\n')"
-  echo "$version"
+  local tag="$(curl -is https://github.com/${repo}/releases/latest | sed -n 's|^Location:.*/tag/\(.*\)$|\1|p' | tr -d '\r\n')"
+  echo "$tag"
 }
 
 gh_download() {
@@ -137,7 +137,7 @@ gh_download() {
   local url="https://github.com/${repo}/releases/download/${version}/${filename}"
   local download_path="${TMPDIR}${filename}"
 
-  echo $url
+  log downloading $url
   curl -L --output "$download_path" "$url"
 }
 
@@ -150,7 +150,7 @@ run_cmd() {
     "$cmd" "$@"
 
   elif [[ -n $cmd ]]; then
-    "$cmd" args
+    "$cmd"
 
   else
     help

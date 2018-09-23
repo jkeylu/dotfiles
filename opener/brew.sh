@@ -12,7 +12,7 @@ EOF
 
 install() {
   if [[ $OS != 'Darwin' ]]; then
-    log "os is not macOS"
+    log "brew can only be installed on macOS"
   fi
 
   if command_exist brew; then

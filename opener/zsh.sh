@@ -11,10 +11,10 @@ EOF
 }
 
 install() {
-  link_file .shell_rc
+  link_file .shell_rc.sh
   link_file .zshrc
-  link_file .shell_alias
-  link_file .shell_function
+  link_file .shell_alias.sh
+  link_file .shell_function.sh
 
   if [[ -d ~/.oh-my-zsh ]]; then
     log "oh-my-zsh already installed"

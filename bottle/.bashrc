@@ -16,7 +16,7 @@ fi
 
 # User configuration
 
-source $HOME/.shell_rc
+source $HOME/.shell_rc.sh
 
 # fzf
 [[ -f ~/.fzf.bash ]] && (source ~/.fzf.bash &> /dev/null || echo ".fzf.bash is somthing wrong")

@@ -1,43 +1,5 @@
 function code () { VSCODE_CWD="$PWD" open -n -b "com.microsoft.VSCode" --args $*; }
 
-function chtsc() {
-  if [[ -z "$1" ]]; then
-    echo "Usage: chtsc [1.5|1.6|1.7|1.8]"
-    echo "Current typescript version is: "
-    tsc -v
-  else
-    if [[ "$1" = '1.5' ]]; then
-        npm install -g typescript@1.5.3
-    elif [[ "$1" = "1.6" ]]; then
-        npm install -g typescript@1.6.2
-    elif [[ "$1" = "1.7" ]]; then
-        npm install -g typescript@1.7.5
-    elif [[ "$1" = "1.8" ]]; then
-        npm install -g typescript@1.8.0
-    fi
-
-    echo -e "Typescript has been switched to: "
-    tsc -v
-  fi
-}
-
-# ngrok
-# http://natapp.cn/
-function comeback() {
-  local port="$1"
-  local subdomain="$2"
-
-  if [[ -z $port ]]; then
-    port="80"
-  fi
-
-  if [[ -z $subdomain ]]; then
-    subdomain="comeback"
-  fi
-
-  ~/.bin/ngrok -config ~/.bin/ngrok.cfg -subdomain $subdomain $port
-}
-
 nvm() {
   if [[ -s $NVM_DIR/nvm.sh ]]; then
     source $NVM_DIR/nvm.sh  # This loads nvm
@@ -46,6 +8,11 @@ nvm() {
   else
     echo "nvm is not installed"
   fi
+}
+
+nvminstall() {
+  local ver=`nvm current`
+  nvm install "$1" --reinstall-packages-from="$ver" --latest-npm
 }
 
 itmux() {

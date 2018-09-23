@@ -62,7 +62,7 @@ source $ZSH/oh-my-zsh.sh
 
 # User configuration
 
-source $HOME/.shell_rc
+source $HOME/.shell_rc.sh
 
 # fzf
 [[ -f ~/.fzf.zsh ]] && (source ~/.fzf.zsh &> /dev/null || echo ".fzf.zsh is somthing wrong")
