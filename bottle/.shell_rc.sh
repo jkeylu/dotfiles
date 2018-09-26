@@ -61,6 +61,9 @@ set -o ignoreeof
 # vimx
 [[ -r ~/.vim/vimx.sh ]] && source ~/.vim/vimx.sh
 
+# brew
+export HOMEBREW_NO_AUTO_UPDATE=1
+
 # nvm
 export NVM_DIR=$HOME/.nvm
 #export NVM_NODEJS_ORG_MIRROR=http://npm.taobao.org/mirrors/node
