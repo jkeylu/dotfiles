@@ -54,9 +54,29 @@ backup() {
     [[ -d $bak_dir ]] || mkdir -p "$bak_dir"
 
     log backup $source_file
-    rm -rf "$dest_file"
+    if [[ -e $dest_file ]]; then
+      mv "$dest_file" "${dest_file}.$(date +%Y%m%d%H%M%S)"
+    fi
     mv "$source_file" "$bak_dir"
   fi
+}
+
+is_link_file() {
+  local name="$1"
+  if [[ "/" = ${name:0-1:1} ]]; then
+    name="${name%?}"
+  fi
+
+  local bottle_file="$BOTTLE_DIR/$name"
+  local link_name="$HOME/$name"
+
+  if [[ -L $link_name ]]; then
+    if [[ $(readlink "$link_name") = $bottle_file ]]; then
+      return 0 # true
+    fi
+  fi
+
+  return 1 # false
 }
 
 link_file() {
@@ -67,6 +87,10 @@ link_file() {
 
   local bottle_file="$BOTTLE_DIR/$name"
   local link_name="$HOME/$name"
+
+  if [[ ! -d ${link_name%/*} ]]; then
+    mkdir -p "${link_name%/*}"
+  fi
 
   if [[ -L $link_name ]]; then
     if [[ $(readlink "$link_name") = $bottle_file ]]; then

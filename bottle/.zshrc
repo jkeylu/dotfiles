@@ -56,6 +56,9 @@ fi
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(z brew npm osx ssh-agent)
+if command -v gpg &> /dev/null; then
+  plugins+=(gpg-agent)
+fi
 zstyle :omz:plugins:ssh-agent lifetime 14h
 
 source $ZSH/oh-my-zsh.sh

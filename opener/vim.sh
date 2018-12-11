@@ -6,22 +6,27 @@ help() {
   cat << EOF
 supported commands:
   install
-  install lite
 EOF
 }
 
 install() {
-  [[ -d ~/.vim/.git ]] && exit 0
+  if is_link_file ".vim/simple.vim"; then
+    log vim is already installed
+    exit 0
+  fi
 
   backup .vim/
-  backup .vimrc
+  link_file .vim/simple.vim
+  link_file .vim/lite.vim
 
-  git clone https://github.com/jkeylu/vim.x.git ~/.vim
-  bash ~/.vim/install.sh
-}
+  if [[ -e ~/.vimrc ]]; then
+    backup ~/.vimrc
+  elif [[ -L ~/.vimrc ]]; then
+    rm ~/.vimrc
+  fi
 
-install_lite() {
-  link_file .vimrc
+  log ln -s ~/.vim/simple.vim ~/.vimrc
+  ln -s ~/.vim/simple.vim ~/.vimrc
 }
 
 run_cmd "$@"

@@ -1,3 +1,12 @@
+"
+" author: jKey Lu <jkeylu@gmail.com>
+"
+
+if !has('nvim')
+  unlet! skip_defaults_vim
+  source $VIMRUNTIME/defaults.vim
+endif
+
 let mapleader = ','
 colorscheme desert
 
@@ -18,3 +27,5 @@ imap jj <Esc>`^
 nmap <leader>nt :Explore<CR>
 nmap <leader>q :q<CR>
 autocmd FileType netrw nmap q :bd<CR>
+
+" vim:ft=vim fdm=marker et ts=4 sw=2 sts=2
