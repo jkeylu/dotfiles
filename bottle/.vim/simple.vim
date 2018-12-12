@@ -13,9 +13,11 @@ let mapleader = ','
 
 let s:plug_vim_path = expand('~/.vim/autoload/plug.vim')
 if empty(glob(s:plug_vim_path))
+  if executable('curl')
     echo 'Downloading plug.vim ...'
     silent exe '!curl -fLo ' . s:plug_vim_path . ' --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim'
     autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
+  endif
 endif
 
 " ==============================================================================
@@ -251,14 +253,16 @@ endfunction
 " ------------------------------------------------------------------------------
 " jlanzarotta/bufexplorer
 " ------------------------------------------------------------------------------
-let g:bufExplorerSplitBelow = 1
-let g:bufExplorerSplitHorzSize = 20
-nnoremap <silent> <leader><leader> :BufExplorerHorizontalSplit<CR>
+let g:bufExplorerDisableDefaultKeyMapping = 1
+nnoremap <silent> <leader><leader> :BufExplorer<CR>
 
 " ------------------------------------------------------------------------------
 " junegunn/fzf
 " ------------------------------------------------------------------------------
-nnoremap <silent> <C-f> :FZF<CR>
+if executable('ag')
+  let $FZF_DEFAULT_COMMAND = 'ag --skip-vcs-ignores --ignore "node_modules" -g ""'
+endif
+nnoremap <silent> <C-p> :FZF<CR>
 
 " ------------------------------------------------------------------------------
 " junegunn/fzf.vim
