@@ -10,12 +10,16 @@ EOF
 }
 
 install() {
-  link_file "Library/Application Support/Code/User/"
+  if ! is_osx; then
+    return
+  fi
+
+  link_file "Library/Application Support/Code/User/keybindings.json"
+  link_file "Library/Application Support/Code/User/settings.json"
 
   if [[ ! -d "/Applications/Visual Studio Code.app" ]]; then
     open "https://code.visualstudio.com/"
     log "please install vscode first"
-    exit 1
   fi
 }
 

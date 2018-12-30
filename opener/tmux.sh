@@ -13,22 +13,25 @@ install() {
   link_file .tmux.conf
 
   if ! command_exist tmux; then
-    if [[ $OS = "Darwin" ]]; then
-      command_exist brew || (log "brew is not installed" && exit 1)
-      brew install tmux
-      brew install reattach-to-user-namespace
+    if is_osx; then
+      ensure_command brew
 
-    elif [[ $OS_ID = "debian" || $OS_ID_LIKE = "debian" ]]; then
-      sudo apt-get install tmux
+      print_run brew install tmux
+      print_run brew install reattach-to-user-namespace
 
-    elif [[ $OS_ID = "arch" || $OS_ID_LIKE = "arch" ]]; then
-      sudo pacman -S tmux
+    elif is_debian; then
+      print_run sudo apt-get install tmux
+
+    elif is_arch; then
+      print_run sudo pacman -S tmux
+
+    elif is_centos; then
+      print_run sudo yum install tmux
     fi
   fi
 
   if [[ ! -d "$HOME/.tmux/plugins/tpm" ]]; then
-    log git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
-    git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+    print_run git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
     tmux source ~/.tmux.conf
   fi
 }

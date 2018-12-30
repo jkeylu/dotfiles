@@ -63,6 +63,23 @@ x() {
   fi
 }
 
+service() {
+  name="$2"
+
+  case "$1" in
+    install)
+      shift 2
+      x $name - install_service "$@"
+      return
+      ;;
+    start)
+      ensure_command pm2
+      pm2 start "$CONFIG_DIR/pm2/$name.config.js"
+      return
+      ;;
+  esac
+}
+
 case "$1" in
   -h|--help|h)
     show_usage
@@ -89,6 +106,11 @@ case "$1" in
     ;;
   -r|--restore|r|restore)
     restore
+    exit 0
+    ;;
+  -s|--svc|--service|s|svc|service)
+    shift
+    service "$@"
     exit 0
     ;;
   *)

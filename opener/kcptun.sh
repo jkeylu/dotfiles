@@ -8,7 +8,8 @@ help() {
   cat << EOF
 supported commands:
   install
-  pm2config
+  install_service client #name #server_ip:#server_port:12948
+  install_service server #name #server_port:#target_port
 EOF
 }
 
@@ -31,7 +32,7 @@ install() {
     exit 0
   fi
 
-  local name="$(echo $OS | tr '[:upper:]' '[:lower:]')"
+  local name="$(uname | tr '[:upper:]' '[:lower:]')"
   local filename="kcptun-${name}-386-${version}.tar.gz"
   local download_path="${TMPDIR}${filename}"
 
@@ -43,44 +44,158 @@ install() {
   mv "${BIN_DIR}/server_${name}_386" "${BIN_DIR}/kcptun-server"
 }
 
-pm2config() {
+server_host=""
+server_port=""
+target_port=""
+
+parse_publish() {
+  local publish="$1"
+  local IFS=":"
+  read server_host server_port target_port <<< "${publish##*-}"
+  if [[ -z $target_port ]]; then
+    if [[ -z $server_port ]]; then
+      server_port="$server_host"
+      target_port="$server_host"
+      server_host=""
+
+    else
+      target_port="$server_port"
+
+      if grep -q '^[0-9]\+$' <(echo $server_host); then
+        server_port="$server_host"
+        server_host=""
+      fi
+    fi
+  fi
+}
+
+# client name server_ip:server_port:12948
+# server name server_port:target_port
+write_config() {
+  local type="$1"
+  local name="kcptun-$type-$2"
+
+  parse_publish "$3"
+
+  local listen_key=""
+  local listen_value=""
+  local target_key=""
+  local target_value=""
+
+  if [[ $type == "client" ]]; then
+    listen_key="localaddr"
+    listen_value="127.0.0.1:$target_port"
+    target_key="remoteaddr"
+    target_value="$server_host:$server_port"
+  else
+    listen_key="listen"
+    listen_value=":$server_port"
+    target_key="target"
+    target_value="127.0.0.1:$target_port"
+  fi
+
+  cat > "$MY_CONFIG_DIR/$name.json" << EOF
+{
+  "${listen_key}": "${listen_value}",
+  "${target_key}": "${target_value}",
+  "crypt": "none",
+  "mtu": 1200,
+  "mode": "normal",
+  "dscp": 46,
+  "nocomp": true
+}
+EOF
+}
+
+create_config() {
   local type="$1"
   local name="$2"
-  local bin_file="$BIN_DIR/kcptun-$type"
-  local file_path="$MY_CONFIG_DIR/$type-$name.config.js"
-  local args=""
 
-  if [[ $# -eq 0 ]]; then
-    ls -l "$MY_CONFIG_DIR" | grep --color '[^ ]\+.config.js'
+  local config_file="$MY_CONFIG_DIR/kcptun-$type-$name.json"
+  if [[ -f $config_file ]]; then
+    log "kcptun-$type-$name.json" is already created
     exit 0
   fi
 
+  write_config "$@"
+
+  local link_file="$MY_CONFIG_DIR/kcptun-$type.json"
+  if [[ ! -L $link_file ]]; then
+    print_run ln -s "$config_file" "$link_file"
+  fi
+}
+
+pm2_config() {
+  create_config "$@"
+
+  local type="$1"
+  local service_name="kcptun-$type"
+  check_pm2_config "$service_name"
+
+  local bin_file="$BIN_DIR/$service_name"
+  local args="-c $MY_CONFIG_DIR/kcptun-$type.json"
+  create_pm2_config "$service_name" "$bin_file" "$args"
+}
+
+launch_agents_config() {
+  create_config "$@"
+
+  local type="$1"
+  local service_name="kcptun-$type"
+  check_launch_agents_config "lu.jkey.$service_name"
+
+  local bin_file="$BIN_DIR/$service_name"
+  cat > "$LAUNCH_AGENTS/lu.jkey.$service_name.plist" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>Label</key>
+        <string>lu.jkey.${service_name}</string>
+
+        <key>ProgramArguments</key>
+        <array>
+            <string>${bin_file}</string>
+            <string>-c</string>
+            <string>${MY_CONFIG_DIR}/kcptun-${type}.json</string>
+        </array>
+
+        <key>RunAtLoad</key>
+        <true/>
+
+        <key>KeepAlive</key>
+        <true/>
+
+        <key>StandardOutPath</key>
+        <string>${LOG_DIR}/${service_name}.log</string>
+
+        <key>StandardErrorPath</key>
+        <string>${LOG_DIR}/${service_name}.log</string>
+    </dict>
+</plist>
+EOF
+}
+
+install_service() {
+  local type="$1"
+  local name="$2"
+
   if [[ $type != "server" && $type != "client" ]]; then
-    log type only support server or client
+    log type only support "server" or "client"
     exit 1
   fi
 
-  if [[ $type == "server" ]]; then
-    args="-l :server_port -t 127.0.0.1:target_port --crypt none --mtu 1200 --mode normal --dscp 46 --nocomp"
-  else
-    args="-l 127.0.0.1:target_port -r server_host:server_port --crypt none --mtu 1200 --mode normal --dscp 46 --nocomp"
+  if ! grep -i -q '^[a-z][a-z0-9]*$' <(echo "$name"); then
+    log config name "$name" is not valid
+    exit 1
   fi
 
-  cat > "$file_path" << EOF
-module.exports = {
-  apps: [
-    {
-      name: 'kcptun-$type-$name',
-      script: '$bin_file',
-      args: '$args'
-      log_date_format: 'YYMMDD HH:mm:ss Z'
-    }
-  ]
-}
-EOF
+  if is_osx; then
+    launch_agents_config "$@"
 
-  echo "RUN pm2 start $file_path"
+  else
+    pm2_config "$@"
+  fi
 }
 
 run_cmd "$@"
-

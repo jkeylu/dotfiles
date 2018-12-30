@@ -10,6 +10,12 @@ if &compatible
 endif
 
 let mapleader = ','
+silent! colorscheme desert
+
+let s:is_unix = has('unix')
+let s:is_mswin = has('win16') || has('win32') || has('win64')
+let s:is_cygwin = has('win32unix')
+let s:is_osx = !s:is_mswin && (has('mac') || has('macunix') || has('gui_macvim') || system('uname') =~? '^darwin')
 
 let s:plug_vim_path = expand('~/.vim/autoload/plug.vim')
 if empty(glob(s:plug_vim_path))
@@ -76,7 +82,9 @@ else
   " }
   " }}}
 endif
-Plug 'junegunn/fzf.vim'
+if !s:is_mswin || executable('fzf')
+  Plug 'junegunn/fzf.vim'
+endif
 
 " Edit
 Plug 'easymotion/vim-easymotion'
@@ -194,6 +202,15 @@ let g:gruvbox_contrast_light = 'hard'
 silent! colorscheme gruvbox
 
 " ------------------------------------------------------------------------------
+" Yggdroot/indentLine
+" ------------------------------------------------------------------------------
+augroup vimx:indentLine
+  autocmd!
+  autocmd BufEnter *.json IndentLinesDisable
+augroup END
+
+
+" ------------------------------------------------------------------------------
 " yonchu/accelerated-smooth-scroll
 " ------------------------------------------------------------------------------
 let g:ac_smooth_scroll_no_default_key_mappings = 1
@@ -202,12 +219,6 @@ nmap <silent> <C-d> <Plug>(ac-smooth-scroll-c-d)
 nmap <silent> <C-u> <Plug>(ac-smooth-scroll-c-u)
 nmap <silent> <S-d> <Plug>(ac-smooth-scroll-c-f)
 nmap <silent> <S-u> <Plug>(ac-smooth-scroll-c-b)
-
-" ------------------------------------------------------------------------------
-" nathanaelkane/vim-indent-guides
-" ------------------------------------------------------------------------------
-let g:indent_guides_guide_size = 1
-let g:indent_guides_start_level = 2
 
 " ------------------------------------------------------------------------------
 " t9md/vim-choosewin
@@ -232,9 +243,12 @@ let NERDTreeQuitOnOpen = 1
 let NERDTreeAutoDeleteBuffer = 1
 let NERDTreeMapToggleHidden = '.'
 
-autocmd StdinReadPre * let s:std_in=1
-autocmd VimEnter * if argc() == 1 && isdirectory(argv()[0]) && !exists('s:std_in') | exe 'NERDTree' argv()[0] | wincmd p | ene | endif
-autocmd bufenter * if (winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree()) | q | endif
+augroup vimx:nerdtree
+  autocmd!
+  autocmd StdinReadPre * let s:std_in=1
+  autocmd VimEnter * if argc() == 1 && isdirectory(argv()[0]) && !exists('s:std_in') | exe 'NERDTree' argv()[0] | wincmd p | ene | endif
+  autocmd bufenter * if (winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree()) | q | endif
+augroup END
 
 nnoremap <silent> <leader>nt :call <SID>open_nerdtree()<CR>
 
@@ -285,8 +299,12 @@ map / <Plug>(easymotion-sn)
 omap / <Plug>(easymotion-tn)
 map n <Plug>(easymotion-next)
 map N <Plug>(easymotion-prev)
-" https://github.com/easymotion/vim-easymotion/issues/348
-autocmd VimEnter * silent! :EMCommandLineNoreMap <C-v> <C-r>+
+
+augroup vimx:vim-easymotion
+  autocmd!
+  " https://github.com/easymotion/vim-easymotion/issues/348
+  autocmd VimEnter * silent! :EMCommandLineNoreMap <C-v> <C-r>+
+augroup END
 
 " ------------------------------------------------------------------------------
 " terryma/vim-multiple-cursors
@@ -327,7 +345,10 @@ let g:LargeFile = 100
 " ------------------------------------------------------------------------------
 " fatih/vim-go
 " ------------------------------------------------------------------------------
-autocmd FileType go call <SID>go_settings()
+augroup vimx:vim-go
+  autocmd!
+  autocmd FileType go call <SID>go_settings()
+augroup END
 
 function! s:go_settings()
   nmap <silent> <buffer> <C-^> :GoReferrers<CR>
@@ -345,7 +366,10 @@ let g:javascript_plugin_jsdoc = 1
 let g:tsuquyomi_completion_detail = 1
 let g:tsuquyomi_javascript_support = 1
 
-autocmd FileType typescript nmap <silent> <buffer> <C-@> <Plug>(TsuquyomiRenameSymbol)
+augroup vimx:tsuquyomi
+  autocmd!
+  autocmd FileType typescript nmap <silent> <buffer> <C-@> <Plug>(TsuquyomiRenameSymbol)
+augroup END
 
 " }}}
 
@@ -381,7 +405,10 @@ set statusline=\ %f%m%r%h%w\ \[%{&fileformat}\\%{&fileencoding}\]\ %=\ Line:%l/%
 if exists('+colorcolumn')
   set colorcolumn=80
 else
-  au BufWinEnter * let w:m2=matchadd('ErrorMsg', '\%>80v.\+', -1)
+  augroup vimx:ruler
+    autocmd!
+    autocmd BufWinEnter * let w:m2=matchadd('ErrorMsg', '\%>80v.\+', -1)
+  augroup END
 endif
 
 " Read first line or last line to exec modeline
@@ -394,8 +421,11 @@ set linebreak
 let &showbreak = '↳ '
 
 " auto open quickfix
-autocmd QuickFixCmdPost [^l]* nested cwindow
-autocmd QuickFixCmdPost l* nested lwindow
+augroup vimx:quickfix
+  autocmd!
+  autocmd QuickFixCmdPost [^l]* nested cwindow
+  autocmd QuickFixCmdPost l* nested lwindow
+augroup END
 
 " search
 set hlsearch
@@ -414,15 +444,18 @@ set tabstop=4
 set shiftwidth=2
 set softtabstop=2
 
-augroup vimx
+augroup vimx:tab-width
+  autocmd!
   autocmd FileType markdown set shiftwidth=4 softtabstop=4
   autocmd FileType python set shiftwidth=4 softtabstop=4
+  autocmd FileType javascript set shiftwidth=2 softtabstop=2
   autocmd FileType typescript set shiftwidth=4 softtabstop=4
   autocmd FileType go set noexpandtab shiftwidth=4 softtabstop=4
 augroup END
 
 " auto set file type
-augroup vimx
+augroup vimx:filetype
+  autocmd!
   autocmd BufNewFile,BufRead *.md set filetype=markdown
   autocmd BufNewFile,BufRead *.coffee set filetype=coffee
   autocmd BufNewFile,BufRead *.ts set filetype=typescript
@@ -436,7 +469,8 @@ set fileencodings=utf-8,gbk,gb2312,cp936
 set fileformats=unix,dos
 
 " remember the position of the last time view
-augroup vimx
+augroup vimx:pos-of-last-view
+  autocmd!
   autocmd FileType text setlocal textwidth=78
   autocmd BufReadPost *
         \ if line("'\"") > 1 && line("'\"") <= line("$") |
@@ -498,7 +532,8 @@ inoremap <expr> <C-k> pumvisible() ? '<C-p>' : '<C-k>'
 
 vnoremap $ $h
 
-augroup vimx
+augroup vimx:quit
+  autocmd!
   autocmd FileType help nmap <silent> <buffer> q :q<CR>
   autocmd FileType qf nmap <silent> <buffer> q :q<CR>
 augroup END

@@ -11,30 +11,55 @@ CONFIG_DIR="$HOME/.config"
 BIN_DIR="$HOME/.bin"
 [[ -d $BIN_DIR ]] || mkdir "$BIN_DIR"
 
-CACHE_DIR="$HOME/.cache"
-[[ -d $CACHE_DIR ]] || mkdir "$CACHE_DIR"
+LOG_DIR="$HOME/.log"
+[[ -d $LOG_DIR ]] || mkdir "$LOG_DIR"
 
 BACKUP_DIR="$HOME/.dotfiles.bak"
 [[ -d $BACKUP_DIR ]] || mkdir "$BACKUP_DIR"
 
-OS=`uname`
-if [[ $OS != 'Darwin' ]]; then
-  if [[ -f "/etc/os-release" ]]; then
-    OS_ID=`sed -n 's/^ID=\(.*\)$/\1/p' /etc/os-release`
-    OS_ID_LIKE=`sed -n 's/^ID_LIKE=\(.*\)$/\1/p' /etc/os-release`
+LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
 
-  elif [[ -f "/etc/centos-release" ]]; then
-    OS_ID="centos"
-    OS_ID_LIKE="redhat"
-  fi
-fi
+is_osx() {
+  [[ `uname` =~ "Darwin" ]]
+}
+is_debian() {
+  [[ -f "/etc/os-release" ]] && grep -q "debian" /etc/os-release
+}
+is_ubuntu() {
+  [[ -f "/etc/os-release" ]] && grep -q "ubuntu" /etc/os-release
+}
+is_arch() {
+  [[ -f "/etc/os-release" ]] && grep -q "arch" /etc/os-release
+}
+is_centos() {
+  [[ -f "/etc/centos-release" ]]
+}
 
 log() {
   echo "  ○ $@"
 }
 
+print_run() {
+  log "$@"
+  "$@"
+}
+
 command_exist() {
   command -v "$1" &> /dev/null
+}
+
+ensure_command() {
+  if ! command_exist "$1"; then
+    log command "$1" is not installed
+    exit 1
+  fi
+}
+
+check_command() {
+  if command_exist "$1"; then
+    log "$1" is already installed
+    exit 0
+  fi
 }
 
 backup() {
@@ -101,8 +126,7 @@ link_file() {
 
   backup "$1"
 
-  log ln -s "$bottle_file" "$link_name"
-  ln -s "$bottle_file" "$link_name"
+  print_run ln -s "$bottle_file" "$link_name"
 }
 
 restore_file() {
@@ -123,8 +147,7 @@ restore_file() {
     return
   fi
 
-  log rm -rf $origin_file
-  rm -rf $origin_file
+  print_run rm -rf $origin_file
 
   if [[ -e $bak_file ]]; then
     log restore "$origin_file"
@@ -134,10 +157,7 @@ restore_file() {
 
 init_work_dir() {
   MY_CONFIG_DIR="$CONFIG_DIR/$1"
-  MY_CACHE_DIR="$CACHE_DIR/$1"
-
   [[ -d $MY_CONFIG_DIR ]] || mkdir "$MY_CONFIG_DIR"
-  [[ -d $MY_CACHE_DIR ]] || mkdir "$MY_CACHE_DIR"
 }
 
 # http://stackoverflow.com/questions/1527049/join-elements-of-an-array
@@ -150,6 +170,9 @@ join_by() {
 gh_latest_tag() {
   local repo="$1"
   local tag="$(curl -is https://github.com/${repo}/releases/latest | sed -n 's|^Location:.*/tag/\(.*\)$|\1|p' | tr -d '\r\n')"
+  if [[ -z $tag ]]; then
+    tag="$(curl -s https://github.com/${repo}/releases | grep -o -m 1 'tag/[^"]\+' | sed -n 's|tag/\(.*\)$|\1|p')"
+  fi
   echo "$tag"
 }
 
@@ -181,3 +204,57 @@ run_cmd() {
   fi
 }
 
+check_launch_agents_config() {
+  if [[ -e "$LAUNCH_AGENTS/$1.plist" ]]; then
+    log "$1.plist is exists"
+    exit 0
+  fi
+}
+
+check_pm2_config() {
+  if [[ -e "$CONFIG_DIR/pm2/$1.config.js" ]]; then
+    log "pm2/$1.config.js is exists"
+    exit 0
+  fi
+}
+
+create_pm2_config() {
+  local PM2_CONFIG_DIR="$CONFIG_DIR/pm2"
+  [[ -d $PM2_CONFIG_DIR ]] || mkdir "$PM2_CONFIG_DIR"
+
+  local $name="$1"
+  local $file_path="$PM2_CONFIG_DIR/$name.config.js"
+  local $script="$2"
+  local $args="$3"
+
+  cat > "$file_path" << EOF
+module.exports = {
+  apps: [
+    {
+      name: '$name',
+      script: '$script',
+      args: '$args',
+      log_date_format: 'YYMMDD HH:mm:ss Z'
+    }
+  ]
+};
+EOF
+
+  echo "dotfilebiu svc start $name"
+}
+
+extract_zip() {
+  local filename="$1"
+  local exdir="$2"
+
+  if command_exist unzip; then
+    unzip -o "$filename" -d "$exdir"
+  elif command_exist python; then
+    python -m zipfile -e "$filename" "$exdir"
+  elif command_exist python3; then
+    python -m zipfile -e "$filename" "$exdir"
+  else
+    log not found unzip command
+    exit 1
+  fi
+}

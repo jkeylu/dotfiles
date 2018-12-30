@@ -113,14 +113,6 @@ if (!(Test-Path -Path $vimfilesDir)) {
     Start-Process -FilePath "cmd.exe" -Verb runas -ArgumentList $args
 }
 
-# $pathEnv = [System.Environment]::GetEnvironmentVariable("Path", "User")
-# $pathEnvList = $pathEnv -split ";"
-# if (!$pathEnvList.Contains($binDir)) {
-#     $pathEnvList += $binDir
-#     $pathEnv = $pathEnvList -join ';'
-#     [System.Environment]::SetEnvironmentVariable("Path2", $pathEnv, "User")
-# }
-
 Invoke-Item -Path $vimDir
 
 Read-Host | Out-Null

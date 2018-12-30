@@ -12,21 +12,19 @@ EOF
 install() {
   link_file .gitconfig
 
-  if command_exist git; then
-    exit 0
-  fi
+  check_command git
 
-  if [[ $OS = "Darwin" ]]; then
-    log xcode-select --install
-    xcode-select --install
+  if is_osx; then
+    print_run xcode-select --install
 
-  elif [[ $OS_ID = "debian" || $OS_ID_LIKE = "debian" ]]; then
-    log sudo apt-get install git
-    sudo apt-get install git
+  elif is_debian; then
+    print_run sudo apt-get install git
 
-  elif [[ $OS_ID = "arch" || $OS_ID_LIKE = "arch" ]]; then
-    log sudo pacman -S git
-    sudo pacman -S git
+  elif is_arch; then
+    print_run sudo pacman -S git
+
+  elif is_centos; then
+    print_run sudo yum install git
 
   else
     log "git is required, please install git first"

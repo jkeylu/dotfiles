@@ -11,23 +11,17 @@ EOF
 }
 
 install() {
-  if [[ $OS != 'Darwin' ]]; then
+  if ! is_osx; then
     log "brew can only be installed on macOS"
   fi
 
-  if command_exist brew; then
-    log "brew already installed"
-    exit 0
-  fi
+  check_command brew
 
   /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 }
 
 uninstall() {
-  if ! command_exist brew; then
-    log "brew is not exist"
-    exit 0
-  fi
+  ensure_command brew
 
   /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/uninstall)"
 }

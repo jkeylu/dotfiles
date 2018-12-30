@@ -11,10 +11,14 @@ EOF
 
 install() {
   link_file .fzf.zsh
+  link_file .fzf.bash
 
-  if [[ $OS = "Darwin" ]]; then
-    command_exist brew || (log "brew is not installed" && exit 1)
-    brew install fzf
+  check_command fzf
+
+  if is_osx; then
+    ensure_command brew
+
+    print_run brew install fzf
   fi
 }
 

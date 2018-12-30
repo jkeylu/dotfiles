@@ -1,4 +1,3 @@
-function code () { VSCODE_CWD="$PWD" open -n -b "com.microsoft.VSCode" --args $*; }
 
 nvm() {
   if [[ -s $NVM_DIR/nvm.sh ]]; then
@@ -23,7 +22,9 @@ itmux() {
   fi
 }
 
-if [[ $(uname -s) = "Darwin" ]]; then
+if [[ `uname` =~ "Darwin" ]]; then
+  code () { VSCODE_CWD="$PWD" open -n -b "com.microsoft.VSCode" --args $*; }
+
   mynetworksetup() {
     case "$1" in
       ls)

@@ -24,22 +24,19 @@ install() {
   git clone git://github.com/robbyrussell/oh-my-zsh.git ~/.oh-my-zsh
 
   if ! command_exist zsh; then
-    if [[ $OS = 'Darwin' ]]; then
-      if command_exist brew; then
-        log brew install zsh
-        brew install zsh
-      else
-        log "brew is not installed"
-        exit 1
-      fi
+    if is_osx; then
+      ensure_command brew
 
-    elif [[ $OS_ID = 'debian' || $OS_ID_LIKE = 'debian' ]]; then
-      log sudo apt-get install zsh
-      sudo apt-get install zsh
+      print_run brew install zsh
 
-    elif [[ $OS_ID = 'arch' || $OS_ID_LIKE = 'arch' ]]; then
-      log sudo pacman -S zsh
-      sudo pacman -S zsh
+    elif is_debian; then
+      print_run sudo apt-get install zsh
+
+    elif is_arch; then
+      print_run sudo pacman -S zsh
+
+    elif is_centos; then
+      print_run sudo yum install zsh
     fi
   fi
 
