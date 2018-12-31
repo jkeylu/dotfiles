@@ -8,8 +8,8 @@ help() {
   cat << EOF
 supported commands:
   install
-  install_service local #name
-  install_service server #name
+  install_service local #name #server #server_port #password
+  install_service server #name #server #server_port #password
 EOF
 }
 
@@ -29,25 +29,24 @@ install() {
 write_config() {
   local type="$1"
   local name="ss-$type-$2"
+  local server="$3"
+  local server_port="$4"
+  local password="$5"
   local config_file="$MY_CONFIG_DIR/$name.json"
 
   cat > "$config_file" << 'EOF'
 {
-  "server": "_SERVER_IP_",
-  "server_port": 14499,
+  "server": "${server}",
+  "server_port": ${server_port},
   "local_port": 1080,
-  "password": "_PASSWORD_",
+  "password": "${password}",
   "timeout": 600,
   "method": "rc4-md5",
   "log": 0
 }
 EOF
 
-  if command_exist vim; then
-    print_run vim "$config_file"
-  else
-    echo "vim $config_file"
-  fi
+  cat "$config_file"
 }
 
 create_config() {

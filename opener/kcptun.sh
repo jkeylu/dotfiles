@@ -74,6 +74,7 @@ parse_publish() {
 write_config() {
   local type="$1"
   local name="kcptun-$type-$2"
+  local config_file="$MY_CONFIG_DIR/$name.json"
 
   parse_publish "$3"
 
@@ -94,7 +95,7 @@ write_config() {
     target_value="127.0.0.1:$target_port"
   fi
 
-  cat > "$MY_CONFIG_DIR/$name.json" << EOF
+  cat > "$config_file" << EOF
 {
   "${listen_key}": "${listen_value}",
   "${target_key}": "${target_value}",
@@ -105,6 +106,8 @@ write_config() {
   "nocomp": true
 }
 EOF
+
+  cat "$config_file"
 }
 
 create_config() {
@@ -199,3 +202,4 @@ install_service() {
 }
 
 run_cmd "$@"
+
