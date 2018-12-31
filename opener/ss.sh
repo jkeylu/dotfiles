@@ -21,6 +21,12 @@ install() {
     brew install shadowsocks-libev
   elif is_debian; then
     sudo apt-get install --no-install-recommends gettext build-essential autoconf libtool libpcre3-dev asciidoc xmlto libev-dev libc-ares-dev automake libmbedtls-dev libsodium-dev
+    git clone https://github.com/shadowsocks/shadowsocks-libev.git ~/shadowsocks-libev
+    pushd ~/shadowsocks-libev
+    git submodule update --init --recursive
+    ./autogen.sh && ./configure && make
+    cp -f src/ss-* "$BIN_DIR/"
+    popd
   else
     log system not supported
   fi

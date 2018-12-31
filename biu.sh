@@ -11,12 +11,14 @@ option:
   -x run script with custom args
   -i install dotfiles
   -r restore dotfiles
+  -s run service
   -h show this help message
 
 examples:
 
 ./biu.sh list
 ./biu.sh install zsh
+./biu.sh svc install kcpss server foo foo.com pass
 ./biu.sh run nvm update
 ./biu.sh run ss - install_config hello
 EOF
