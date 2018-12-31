@@ -40,7 +40,7 @@ write_config() {
   local password="$5"
   local config_file="$MY_CONFIG_DIR/$name.json"
 
-  cat > "$config_file" << 'EOF'
+  cat > "$config_file" << EOF
 {
   "server": "${server}",
   "server_port": ${server_port},
@@ -52,7 +52,7 @@ write_config() {
 }
 EOF
 
-  cat "$config_file"
+  print_run cat "$config_file"
 }
 
 create_config() {

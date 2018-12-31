@@ -107,7 +107,7 @@ write_config() {
 }
 EOF
 
-  cat "$config_file"
+  print_run cat "$config_file"
 }
 
 create_config() {
