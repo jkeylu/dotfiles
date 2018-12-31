@@ -94,7 +94,7 @@ launch_agents_config() {
   local service_name="ss-$type"
   check_launch_agents_config "lu.jkey.$service_name"
 
-  local bin_file="$BIN_DIR/$service_name"
+  local bin_file="$(which $service_name)"
   cat > "$LAUNCH_AGENTS/lu.jkey.$service_name.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -75,9 +75,21 @@ service() {
       return
       ;;
     start)
-      ensure_command pm2
-      pm2 start "$CONFIG_DIR/pm2/$name.config.js"
+      if is_osx; then
+        launchctl load "$LAUNCH_AGENTS/lu.jkey.$name.plist"
+      else
+        ensure_command pm2
+        pm2 start "$CONFIG_DIR/pm2/$name.config.js"
+      fi
       return
+      ;;
+    stop)
+      if is_osx; then
+        launchctl unload "$LAUNCH_AGENTS/lu.jkey.$name.plist"
+      else
+        ensure_command pm2
+        pm2 stop "$CONFIG_DIR/pm2/$name.config.js"
+      fi
       ;;
   esac
 }

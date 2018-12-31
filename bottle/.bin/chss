@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
 
 CONFIG_DIR="$HOME/.config/shadowsocks"
-CONFIG_FILE="$CONFIG_DIR/config.json"
+CONFIG_LINK="$CONFIG_DIR/ss-local.json"
+LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
+SS_PLIST="$LAUNCH_AGENTS/lu.jkey.ss-local.plist"
+KCPTUN_PLIST="$LAUNCH_AGENTS/lu.jkey.kcptun-client.plist"
 
-config_get() {
-  local key=$1
-  echo $(cat "$CONFIG_FILE" | sed -n 's/.*"'$key'": *"\{0,1\}\([^,"]*\)"\{0,1\}.*/\1/p')
+is_over_kcptun() {
+  readlink "$CONFIG_LINK" | grep -i -q '\.kcptun\.json$'
 }
 
-LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
-SS_PLIST="$LAUNCH_AGENTS/ss-local.plist"
-KCPTUN_PLIST="$LAUNCH_AGENTS/kcptun-client.plist"
-
 start() {
-  if [[ `config_get over_kcptun` = "1" ]]; then
+  if is_over_kcptun; then
     echo load kcptun-client
     launchctl load "$KCPTUN_PLIST"
   fi
@@ -43,12 +41,11 @@ Y="\033[0;32mo\033[0m"
 N="\033[0;31mx\033[0m"
 
 status() {
-  local src="$CONFIG_DIR/config.json"
-  local target="$(ls -l "$src" | awk -F "-> " '{print $2}' | grep -o '[^./]\+\.config\.json')"
-  echo -e "config.json \033[0;35m->\033[0m $target\n"
+  local target="$(ls -l "$CONFIG_LINK" | awk -F "-> " '{print $2}' | grep -o '[^/]\+\.json')"
+  echo -e "ss-local.json \033[0;35m->\033[0m $target\n"
 
   local st=$N
-  if [[ `config_get over_kcptun` = "1" ]]; then
+  if is_over_kcptun; then
     st=$Y
   fi
   echo -e "over kcptun $st"
@@ -69,27 +66,46 @@ status() {
 }
 
 list() {
-  ls "$CONFIG_DIR/" | grep '\.config\.json'
+  echo -e "\033[0;35mchange shadowsocks server with one of the following configuration files\033[0m"
+  ls "$CONFIG_DIR" | grep 'ss-local-[^.]*\.json' | sed -n 's/ss-local-\([^.]*\).json/\1/p'
 }
 
 change() {
   local name="$1"
-  local config="$CONFIG_DIR/$name.config.json"
-  local config_link="$CONFIG_DIR/config.json"
 
-  if [[ -z $name || ! -f $config ]]; then
-    echo -e "\033[0;35mchange shadowsocks server with one of the following configuration files\033[0m"
+  if [[ -z $name ]]; then
     list
-    exit 1
+    return
   fi
 
-  rm -f "$config_link"
-  ln -s "$config" "$config_link"
+  local kcp="$2"
+
+  if [[ -z $kcp ]]; then
+    if is_over_kcptun; then
+      kcp="kcp"
+    fi
+  fi
+
+  if [[ -n $kcp ]]; then
+    if [[ $kcp != "nokcp" ]]; then
+      name="$name.kcptun"
+    fi
+  fi
+
+  local config_file="$CONFIG_DIR/ss-local-$name.json"
+
+  if [[ ! -f $config_file ]]; then
+    list
+    return
+  fi
+
+  rm "$CONFIG_LINK"
+  ln -s "$config_file" "$CONFIG_LINK"
 
   restart
 
   echo "Shadowsocks server has been switched to: "
-  ls -G -l "$config_link"
+  ls -G -l "$CONFIG_LINK"
 }
 
 case "$1" in
@@ -108,13 +124,11 @@ case "$1" in
   l|ls|list)
     list
     ;;
-  *)
-    if [[ -n $1 && -f "$CONFIG_DIR/$1.config.json" ]]; then
-      change "$1"
-      exit 0
-    fi
-
+  h|help|--help)
     echo "Usage: $0 {start|stop|restart|list|status|config-name}"
+    ;;
+  *)
+    change "$@"
     ;;
 esac
 
