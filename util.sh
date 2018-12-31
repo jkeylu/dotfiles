@@ -222,10 +222,10 @@ create_pm2_config() {
   local PM2_CONFIG_DIR="$CONFIG_DIR/pm2"
   [[ -d $PM2_CONFIG_DIR ]] || mkdir "$PM2_CONFIG_DIR"
 
-  local $name="$1"
-  local $file_path="$PM2_CONFIG_DIR/$name.config.js"
-  local $script="$2"
-  local $args="$3"
+  local name="$1"
+  local file_path="$PM2_CONFIG_DIR/$name.config.js"
+  local script="$2"
+  local args="$3"
 
   cat > "$file_path" << EOF
 module.exports = {
