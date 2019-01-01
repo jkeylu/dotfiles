@@ -26,6 +26,20 @@ if empty(glob(s:plug_vim_path))
   endif
 endif
 
+if !empty(glob('~/.vim/extra.vim'))
+  source ~/.vim/extra.vim
+endif
+
+function s:vimxHook(name)
+  let fnName = 'VimxHook' . a:name
+  if !exists('*' . l:fnName)
+    return
+  endif
+
+  let Func = function(l:fnName)
+  call Func()
+endfunction
+
 " ==============================================================================
 " {{{ plug.vim
 " ==============================================================================
@@ -181,6 +195,8 @@ if executable('tsc')
   Plug 'Quramy/tsuquyomi'
 endif
 
+call s:vimxHook('LoadPlugins')
+
 call plug#end()
 endif
 " }}}
@@ -250,14 +266,14 @@ augroup vimx:nerdtree
   autocmd bufenter * if (winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree()) | q | endif
 augroup END
 
-nnoremap <silent> <leader>nt :call <SID>open_nerdtree()<CR>
+nnoremap <silent> <leader>nt :call <SID>openNERDTree()<CR>
 
-function! s:is_nerdtree_opened()
+function! s:isNERDTreeOpened()
   return exists('t:NERDTreeBufName') && bufwinnr(t:NERDTreeBufName) != -1
 endfunction
 
-function! s:open_nerdtree()
-  if !s:is_nerdtree_opened() && &modifiable && strlen(expand('%')) > 0 && !&diff
+function! s:openNERDTree()
+  if !s:isNERDTreeOpened() && &modifiable && strlen(expand('%')) > 0 && !&diff
     NERDTreeFind
   else
     NERDTree
@@ -347,10 +363,10 @@ let g:LargeFile = 100
 " ------------------------------------------------------------------------------
 augroup vimx:vim-go
   autocmd!
-  autocmd FileType go call <SID>go_settings()
+  autocmd FileType go call <SID>goSettings()
 augroup END
 
-function! s:go_settings()
+function! s:goSettings()
   nmap <silent> <buffer> <C-^> :GoReferrers<CR>
   nmap <silent> <buffer> <C-@> :GoRename<CR>
 endfunction
@@ -370,6 +386,11 @@ augroup vimx:tsuquyomi
   autocmd!
   autocmd FileType typescript nmap <silent> <buffer> <C-@> <Plug>(TsuquyomiRenameSymbol)
 augroup END
+
+" ------------------------------------------------------------------------------
+" hook config plugins
+" ------------------------------------------------------------------------------
+call s:vimxHook('ConfigPlugins')
 
 " }}}
 
@@ -537,6 +558,8 @@ augroup vimx:quit
   autocmd FileType help nmap <silent> <buffer> q :q<CR>
   autocmd FileType qf nmap <silent> <buffer> q :q<CR>
 augroup END
+
+call s:vimxHook('ConfigExtra')
 " }}}
 
 " vim:ft=vim fdm=marker et ts=4 sw=2 sts=2

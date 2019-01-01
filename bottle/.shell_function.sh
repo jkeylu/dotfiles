@@ -25,30 +25,33 @@ itmux() {
 if [[ `uname` =~ "Darwin" ]]; then
   code () { VSCODE_CWD="$PWD" open -n -b "com.microsoft.VSCode" --args $*; }
 
-  mynetworksetup() {
-    case "$1" in
-      ls)
-        networksetup -listnetworkserviceorder
-        ;;
-      getsfp)
-        networksetup -getsocksfirewallproxy "$2"
-        ;;
-      setsfp)
-        networksetup -setsocksfirewallproxy "$2" "$3" "$4"
-        ;;
-      tgsfp)
-        if networksetup -getsocksfirewallproxy "$2" | grep --quiet 'Enabled: Yes'; then
-          networksetup -setsocksfirewallproxystate "$2" off
-        else
-          networksetup -setsocksfirewallproxystate "$2" on
-        fi
-        echo 'Change state to:'
-        networksetup -getsocksfirewallproxy "$2" | grep '^Enabled:'
-        ;;
-      *)
-        echo "mynetworksetup ls|getsfp|setsfp|tgsfp"
-        ;;
-    esac
+  switchNetworkProxy() {
+    local service="$1"
+    local state="$2"
+
+    if [[ -z $service ]]; then
+      networksetup -listnetworkserviceorder
+      return
+    fi
+
+    if [[ -z $state ]]; then
+      networksetup -getsocksfirewallproxy "$service"
+      return
+    fi
+
+    if [[ $state != 'on' && $state != 'off' ]]; then
+      echo setNetworkProxy [service] [on|off]
+      return
+    fi
+
+    networksetup -setsocksfirewallproxystate "$service" "$state"
+
+    echo Change state to
+    networksetup -getsocksfirewallproxy "$service" | grep '^Enabled:'
+  }
+
+  switchWifiProxy() {
+    switchNetworkProxy "Wi-Fi" "$1"
   }
 fi
 

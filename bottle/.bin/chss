@@ -87,7 +87,7 @@ change() {
   fi
 
   if [[ -n $kcp ]]; then
-    if [[ $kcp != "nokcp" ]]; then
+    if [[ $kcp != "nokcp" && $kcp != 'unkcp' ]]; then
       name="$name.kcptun"
     fi
   fi
