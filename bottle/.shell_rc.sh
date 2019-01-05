@@ -18,6 +18,8 @@ export PATH=$HOME/.bin:$PATH
 [[ -d $HOME/Dropbox ]] && export PATH=$HOME/Dropbox/usr/bin:$PATH
 # export MANPATH="/usr/local/man:$MANPATH"
 
+[[ -z $TMPDIR ]] && export TMPDIR=/tmp
+
 # You may need to manually set your language environment
 # export LANG=en_US.UTF-8
 export LANG=zh_CN.UTF-8
@@ -95,5 +97,8 @@ fi
 
 # electron
 export ELECTRON_MIRROR=http://npm.taobao.org/mirrors/electron/
+
+# puppeteer
+export PUPPETEER_DOWNLOAD_HOST=https://npm.taobao.org/mirrors/
 
 # vim:ft=sh et ts=2 sw=2 sts=2

@@ -252,7 +252,7 @@ extract_zip() {
   elif command_exist python; then
     python -m zipfile -e "$filename" "$exdir"
   elif command_exist python3; then
-    python -m zipfile -e "$filename" "$exdir"
+    python3 -m zipfile -e "$filename" "$exdir"
   else
     log not found unzip command
     exit 1
