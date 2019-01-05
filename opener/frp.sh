@@ -19,6 +19,12 @@ download() {
   local tag=`gh_latest_tag $repo`
   local version="${tag#v}"
 
+  local current_version="$1"
+  if [[ $version == $current_version ]]; then
+    log "$version is latest version"
+    exit 0
+  fi
+
   if [[ `uname` == 'Darwin' ]]; then
     dl_filename="frp_${version}_darwin_amd64.tar.gz"
   elif [[ `uname` == 'Linux' ]]; then
@@ -44,23 +50,22 @@ install() {
 
   download
 
-  tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 '*frpc'
-  tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 '*frps'
-  tar zxvf "${TMPDIR}${dl_filename}" -C "$MY_CONFIG_DIR" --strip-components 1 '*frp*.ini'
+  tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1
+  mv $BIN_DIR/frp*.ini $MY_CONFIG_DIR
+  rm -f $BIN_DIR/LICENSE
 }
 
 update() {
+  local current_version
   if [[ -x "$BIN_DIR/frpc" ]]; then
-    log "current frpc version: $($BIN_DIR/frpc --version)"
-  fi
-  if [[ -x "$BIN_DIR/frps" ]]; then
-    log "current frps version: $($BIN_DIR/frps --version)"
+    current_version="$($BIN_DIR/frpc --version)"
+    log "current frp version: $current_version"
   fi
 
-  download
+  download "$current_version"
 
-  tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 '*frpc'
-  tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1 '*frps'
+  tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1
+  rm -f $BIN_DIR/frp*.ini $BIN_DIR/LICENSE
 }
 
 pm2_config() {
