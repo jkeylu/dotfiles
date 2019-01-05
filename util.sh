@@ -227,6 +227,8 @@ create_pm2_config() {
   local script="$2"
   local args="$3"
 
+  log "create pm2 config: $file_path"
+
   cat > "$file_path" << EOF
 module.exports = {
   apps: [
@@ -240,7 +242,7 @@ module.exports = {
 };
 EOF
 
-  echo "dotfilebiu svc start $name"
+  log "dotfilebiu svc start $name"
 }
 
 extract_zip() {
