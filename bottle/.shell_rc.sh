@@ -18,7 +18,7 @@ export PATH=$HOME/.bin:$PATH
 [[ -d $HOME/Dropbox ]] && export PATH=$HOME/Dropbox/usr/bin:$PATH
 # export MANPATH="/usr/local/man:$MANPATH"
 
-[[ -z $TMPDIR ]] && export TMPDIR=/tmp
+[[ -z $TMPDIR ]] && export TMPDIR=/tmp/
 
 # You may need to manually set your language environment
 # export LANG=en_US.UTF-8
