@@ -40,6 +40,8 @@ function s:vimxHook(name)
   call Func()
 endfunction
 
+call s:vimxHook('Start')
+
 " ==============================================================================
 " {{{ plug.vim
 " ==============================================================================
@@ -189,10 +191,11 @@ endif
 Plug 'hail2u/vim-css3-syntax'
 Plug 'cakebaker/scss-syntax.vim'
 Plug 'pangloss/vim-javascript'
-Plug 'moll/vim-node'
 Plug 'leafgarland/typescript-vim'
 if executable('tsc')
   Plug 'Quramy/tsuquyomi'
+else
+  Plug 'moll/vim-node'
 endif
 
 call s:vimxHook('LoadPlugins')
@@ -559,7 +562,7 @@ augroup vimx:quit
   autocmd FileType qf nmap <silent> <buffer> q :q<CR>
 augroup END
 
-call s:vimxHook('ConfigExtra')
+call s:vimxHook('End')
 " }}}
 
 " vim:ft=vim fdm=marker et ts=4 sw=2 sts=2

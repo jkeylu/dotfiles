@@ -86,7 +86,7 @@ fi
 
 # go
 if command -v go &> /dev/null; then
-  export GOPATH=$HOME/Projects/gocode
+  export GOPATH=$HOME/Projects/go
   export PATH=$GOPATH/bin:$PATH
 fi
 
