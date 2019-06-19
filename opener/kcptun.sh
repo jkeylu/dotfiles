@@ -33,15 +33,15 @@ install() {
   fi
 
   local name="$(uname | tr '[:upper:]' '[:lower:]')"
-  local filename="kcptun-${name}-386-${version}.tar.gz"
+  local filename="kcptun-${name}-amd64-${version}.tar.gz"
   local download_path="${TMPDIR}${filename}"
 
   gh_download $repo $tag $filename
 
   tar zxvf "$download_path" -C "$BIN_DIR"
 
-  mv "${BIN_DIR}/client_${name}_386" "${BIN_DIR}/kcptun-client"
-  mv "${BIN_DIR}/server_${name}_386" "${BIN_DIR}/kcptun-server"
+  mv "${BIN_DIR}/client_${name}_amd64" "${BIN_DIR}/kcptun-client"
+  mv "${BIN_DIR}/server_${name}_amd64" "${BIN_DIR}/kcptun-server"
 }
 
 server_host=""
