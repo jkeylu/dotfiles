@@ -81,8 +81,8 @@ dotfilebiu install iterm2
 ### kcpss
 
 ```sh
-dotfilebiu service kcpss install client "#name" "#server" "#password"
-dotfilebiu service kcpss install server "#name" "#server" "#password"
+dotfilebiu service install kcpss client "#name" "#server" "#password"
+dotfilebiu service install kcpss server "#name" "#server" "#password"
 ```
 
 ### kcptun
@@ -90,8 +90,8 @@ dotfilebiu service kcpss install server "#name" "#server" "#password"
 ```sh
 # install or update kcptun
 dotfilebiu install kcptun
-dotfilebiu service kcptun install client "#name" "#server_ip:#server_port:12948"
-dotfilebiu service kcptun install server "#name" "#server_port:#target_port"
+dotfilebiu service install kcptun client "#name" "#server_ip:#server_port:12948"
+dotfilebiu service install kcptun server "#name" "#server_port:#target_port"
 ```
 
 ### nvm
@@ -111,8 +111,8 @@ dotfilebiu install pm2
 
 ```sh
 dotfilebiu install ss
-dotfilebiu service ss install local "#name" "#server" "#server_port" "#password"
-dotfilebiu service ss install server "#name" "#server" "#server_port" "#password"
+dotfilebiu service install ss local "#name" "#server" "#server_port" "#password"
+dotfilebiu service install ss server "#name" "#server" "#server_port" "#password"
 ```
 
 ### tmux

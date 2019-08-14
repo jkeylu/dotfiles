@@ -242,7 +242,7 @@ module.exports = {
 };
 EOF
 
-  log "dotfilebiu svc start $name"
+  log "Start Service Run: dotfilebiu svc start $name"
 }
 
 extract_zip() {

@@ -30,12 +30,12 @@ install_service() {
   local kcptun_script="$OPENER_DIR/kcptun.sh"
 
   if [[ $type = "client" ]]; then
-    bash "$kcptun_script" - "install_service" "client" "$name" "$server:24499:12948"
-    bash "$ss_script" - "install_service" "local" "$name" "$server" "34499" "$password"
-    bash "$ss_script" - "create_config" "local" "$name.kcptun" "127.0.0.1" "12948" "$password"
+    bash "$kcptun_script" - "install_service" "client" "$name" "$server:40255:40155"
+    bash "$ss_script" - "install_service" "local" "$name" "$server" "40055" "$password"
+    bash "$ss_script" - "create_config" "local" "$name.kcptun" "127.0.0.1" "40155" "$password"
   else
-    bash "$kcptun_script" - "install_service" "server" "$name" "$server:24499:34499"
-    bash "$ss_script" - "install_service" "server" "$name" "0.0.0.0" "34499" "$password"
+    bash "$kcptun_script" - "install_service" "server" "$name" "$server:40255:40055"
+    bash "$ss_script" - "install_service" "server" "$name" "0.0.0.0" "40055" "$password"
   fi
 }
 
