@@ -51,6 +51,7 @@ dotfilebiu install code
 dotfilebiu install frp
 dotfilebiu run frp update
 dotfilebiu service install frp [frpc|frps]
+dotfilebiu svc start [frpc|frps]
 ```
 
 ### fzf
