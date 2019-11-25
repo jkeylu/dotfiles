@@ -53,6 +53,7 @@ install() {
   tar zxvf "${TMPDIR}${dl_filename}" -C "$BIN_DIR" --strip-components 1
   mv $BIN_DIR/frp*.ini $MY_CONFIG_DIR
   rm -f $BIN_DIR/LICENSE
+  rm -rf $BIN_DIR/systemd
 }
 
 update() {

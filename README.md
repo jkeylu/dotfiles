@@ -50,7 +50,7 @@ dotfilebiu install code
 ```sh
 dotfilebiu install frp
 dotfilebiu run frp update
-dotfilebiu service frp install [frpc|frps]
+dotfilebiu service install frp [frpc|frps]
 ```
 
 ### fzf
@@ -69,7 +69,7 @@ dotfilebiu install git
 
 ```sh
 dotfilebiu install glider
-dotfilebiu service glider install
+dotfilebiu service install glider
 ```
 
 ### iterm2
