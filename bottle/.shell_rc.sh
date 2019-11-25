@@ -68,7 +68,7 @@ export HOMEBREW_NO_AUTO_UPDATE=1
 
 # nvm
 export NVM_DIR=$HOME/.nvm
-export NVM_NODEJS_ORG_MIRROR=http://npm.taobao.org/mirrors/node
+# export NVM_NODEJS_ORG_MIRROR=https://npm.taobao.org/mirrors/node
 #[[ -s $NVM_DIR/nvm.sh ]] && source $NVM_DIR/nvm.sh  # This loads nvm
 #[[ -r $NVM_DIR/bash_completion ]] && source $NVM_DIR/bash_completion
 if [[ -f $NVM_DIR/alias/default ]]; then

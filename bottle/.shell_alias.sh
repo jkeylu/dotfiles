@@ -30,9 +30,8 @@ alias cnpm="npm \
             --disturl=https://npm.taobao.org/dist \
             --userconfig=$HOME/.cnpmrc"
 
-alias nightly_node="NVM_NODEJS_ORG_MIRROR=https://nodejs.org/download/nightly"
-alias taobao_node="NVM_NODEJS_ORG_MIRROR=http://npm.taobao.org/mirrors/node"
-alias official_node="NVM_NODEJS_ORG_MIRROR=https://nodejs.org/dist"
-alias cnvm="taobao_node nvm"
+alias nightly_nvm="NVM_NODEJS_ORG_MIRROR=https://nodejs.org/download/nightly nvm"
+alias taobao_nvm="NVM_NODEJS_ORG_MIRROR=https://npm.taobao.org/mirrors/node nvm"
+# alias official_nvm="NVM_NODEJS_ORG_MIRROR=https://nodejs.org/dist nvm"
 
 # vim:ft=sh et ts=2 sw=2 sts=2
