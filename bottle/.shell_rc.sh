@@ -101,4 +101,8 @@ export ELECTRON_MIRROR=http://npm.taobao.org/mirrors/electron/
 # puppeteer
 export PUPPETEER_DOWNLOAD_HOST=https://npm.taobao.org/mirrors/
 
+
+# private shell rc
+[[ -f ~/.shell_private.sh ]] && source ~/.shell_private.sh
+
 # vim:ft=sh et ts=2 sw=2 sts=2
