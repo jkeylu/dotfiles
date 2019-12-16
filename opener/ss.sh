@@ -47,7 +47,8 @@ write_config() {
   "local_port": 1080,
   "password": "${password}",
   "timeout": 600,
-  "method": "rc4-md5",
+  "method": "xchacha20-ietf-poly1305",
+  "nameserver": "8.8.8.8",
   "log": 0
 }
 EOF
