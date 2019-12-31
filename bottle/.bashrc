@@ -71,7 +71,7 @@ ssh_agent_check() {
 
 [ -f ~/.bash_start.sh ] && source ~/.bash_start.sh
 
-if [ "$DISABLE_SSH_AGENT" = "1" ]; then
+if [ "$ENABLE_SSH_AGENT" = "1" ] || ([ -z "$SSH_CLIENT" ] && [ -z "$SSH_TTY"]); then
   ssh_agent_check
 fi
 
