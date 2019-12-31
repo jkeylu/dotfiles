@@ -50,7 +50,11 @@ ssh_agent_start() {
 
 ssh_agent_check() {
   if [ -n "$SSH_AGENT_PID" ]; then
-    ps -f -u "$USERNAME" | grep "$SSH_AGENT_PID" | grep -q ssh-agent
+    local username="$USERNAME"
+    if [ -z $username ]; then
+      username="$(whoami)"
+    fi
+    ps -f -u "$username" | grep "$SSH_AGENT_PID" | grep -q ssh-agent
     if [ $? -ne 0 ]; then
       ssh_agent_start
     fi
@@ -65,8 +69,11 @@ ssh_agent_check() {
   fi
 }
 
-ssh_agent_check
-unset SSH_AGENT_ENV
+[ -f ~/.bash_start.sh ] && source ~/.bash_start.sh
+
+if [ "$DISABLE_SSH_AGENT" = "1" ]; then
+  ssh_agent_check
+fi
 
 
 # User configuration
