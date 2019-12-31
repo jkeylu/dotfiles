@@ -50,44 +50,45 @@ silent! if plug#begin('~/.vim/plugged')
 Plug 'morhetz/gruvbox'
 Plug 'itchyny/lightline.vim'
 Plug 'Yggdroot/indentLine'
-Plug 'yonchu/accelerated-smooth-scroll'
 " {{{ Usage
 " `<C-d>` scroll down
 " `<C-u>` scroll up
 " }}}
+Plug 'yonchu/accelerated-smooth-scroll'
 Plug 'yianwillis/vimcdoc'
 
 " Browsing
 Plug 'inkarkat/vim-ingo-library'
-Plug 'inkarkat/vim-mark'
 " {{{ Usage
 " `,m` mark word under the cursor
 " }}}
-Plug 't9md/vim-choosewin'
+Plug 'inkarkat/vim-mark'
 " {{{ Usage
 " `=` invoke choosewin mode
 "   `s` Swap window
 "   `S` Swap window but stay
 " }}}
+Plug 't9md/vim-choosewin'
 Plug 'airblade/vim-rooter'
-Plug 'scrooloose/nerdtree'
 " {{{ Usage
 " `,nt` Open NERDTree
 "   `o` open file, open & close node
 "   `m` open menu
+"   `P` Jump to the root node
+"   `p` Jump to current nodes parent
 "   `C` change tree root to selected dir
 "   `u` move tree root up a dir
 " }}}
-Plug 'jlanzarotta/bufexplorer'
+Plug 'scrooloose/nerdtree'
 " {{{ Usage
 " `,,` Open bufexplorer
 " }}}
+Plug 'jlanzarotta/bufexplorer'
 if executable('fzf')
   if isdirectory('/usr/local/opt/fzf')
     Plug '/usr/local/opt/fzf'
   endif
 else
-  Plug 'junegunn/fzf', { 'do': './install --bin' }
   " {{{ Usage
   " in fzf
   " {
@@ -97,13 +98,13 @@ else
   "   'ctrl-v': 'vsplit'
   " }
   " }}}
+  Plug 'junegunn/fzf', { 'do': './install --bin' }
 endif
 if !s:is_mswin || executable('fzf')
   Plug 'junegunn/fzf.vim'
 endif
 
 " Edit
-Plug 'easymotion/vim-easymotion'
 " {{{ Usage
 " `;w` word motion
 " `;b`
@@ -111,28 +112,32 @@ Plug 'easymotion/vim-easymotion'
 " `;f` looking for right
 " `;F` looking for right
 " }}}
-Plug 'terryma/vim-multiple-cursors'
+Plug 'easymotion/vim-easymotion'
 " {{{ Usage
 " `<C-n>` next
 " `<C-p>` prev
 " `<C-x>` skip
 " `<Tab>` quit
 " }}}
-Plug 'ntpeters/vim-better-whitespace'
+Plug 'terryma/vim-multiple-cursors'
 " {{{ Usage
 " `:StripWhitespace`
 " }}}
-Plug 'Raimondi/delimitMate'
+Plug 'ntpeters/vim-better-whitespace'
 " {{{ Usage
 " `<S-Tab>`
 " `<C-G>g`
 " }}}
-Plug 'scrooloose/nerdcommenter'
+Plug 'Raimondi/delimitMate'
 " {{{ Usage
 " `<leader>cm` minimal comment
 " `<leader>cl` aligned comment
 " `<leader>cu` uncomments the selected line(s)
 " }}}
+Plug 'scrooloose/nerdcommenter'
+if executable('node')
+  Plug 'neoclide/coc.nvim', { 'branch': 'release', 'for': ['javascript', 'html', 'css', 'json'] }
+endif
 
 " File
 Plug 'vim-scripts/LargeFile'
@@ -147,7 +152,6 @@ endif
 
 " Git
 if has('signs')
-  Plug 'airblade/vim-gitgutter'
   " {{{ Usage
   " `]c` jump to next hunk (change)
   " `[c` jump to previous hunk (change)
@@ -155,8 +159,8 @@ if has('signs')
   " `<leader>hr` revert it
   " `<leader>hp` preview a hunk's changes
   " }}}
+  Plug 'airblade/vim-gitgutter'
 endif
-Plug 'tpope/vim-fugitive'
 " {{{ Usage
 " `:Gsplit`, `:Gvsplit`
 " `:Gdiff`
@@ -164,7 +168,7 @@ Plug 'tpope/vim-fugitive'
 " `:Gcommit`
 " `:Glog`
 " }}}
-Plug 'idanarye/vim-merginal'
+Plug 'tpope/vim-fugitive'
 " {{{ Usage
 " `:Merginal`
 " `C/cc` Checkout the branch under the cursor.
@@ -175,28 +179,29 @@ Plug 'idanarye/vim-merginal'
 "        branch. If there are merge conflicts, the merge conflicts buffer will open
 "        in place of the branch list buffer.
 " }}}
-Plug 'gregsexton/gitv', { 'on': ['Gitv'] }
+Plug 'idanarye/vim-merginal'
 " {{{ Usage
 " `:Gitv`
 " }}}
+Plug 'gregsexton/gitv', { 'on': ['Gitv'] }
 
 " Lang
 if executable('go')
-  Plug 'fatih/vim-go'
   " {{{ Usage
   " `C-]` = `:GoDef`
   " `C-t` = `:GoDefPop`
   " }}}
+  Plug 'fatih/vim-go'
 endif
 Plug 'hail2u/vim-css3-syntax'
 Plug 'cakebaker/scss-syntax.vim'
 Plug 'pangloss/vim-javascript'
 Plug 'leafgarland/typescript-vim'
-if executable('tsc')
-  Plug 'Quramy/tsuquyomi'
-else
+"if executable('tsc')
+"  Plug 'Quramy/tsuquyomi'
+"else
   Plug 'moll/vim-node'
-endif
+"endif
 
 call s:vimxHook('LoadPlugins')
 
@@ -238,6 +243,14 @@ nmap <silent> <C-d> <Plug>(ac-smooth-scroll-c-d)
 nmap <silent> <C-u> <Plug>(ac-smooth-scroll-c-u)
 nmap <silent> <S-d> <Plug>(ac-smooth-scroll-c-f)
 nmap <silent> <S-u> <Plug>(ac-smooth-scroll-c-b)
+
+" ------------------------------------------------------------------------------
+" inkarkat/vim-mark
+" ------------------------------------------------------------------------------
+if has('gui_running')
+  let g:mwDefaultHighlightingPalette = 'extended'
+  let g:mwDefaultHighlightingNum = 18
+endif
 
 " ------------------------------------------------------------------------------
 " t9md/vim-choosewin
@@ -342,12 +355,36 @@ let g:better_whitespace_filetypes_blacklist = ['diff', 'gitcommit', 'unite', 'qf
 "let delimitMate_expand_space = 1
 
 " ------------------------------------------------------------------------------
-" jkeylu/mark2666
+" neoclide/coc.nvim
 " ------------------------------------------------------------------------------
-if has('gui_running')
-  let g:mwDefaultHighlightingPalette = 'extended'
-  let g:mwDefaultHighlightingNum = 18
-endif
+" Remap keys for gotos
+nmap <silent> gd <Plug>(coc-definition)
+nmap <silent> gy <Plug>(coc-type-definition)
+nmap <silent> gi <Plug>(coc-implementation)
+nmap <silent> gr <Plug>(coc-references)
+
+" Use K to show documentation in preview window
+nnoremap <silent> K :call <SID>show_documentation()<CR>
+
+function! s:show_documentation()
+  if (index(['vim','help'], &filetype) >= 0)
+    execute 'h '.expand('<cword>')
+  else
+    call CocAction('doHover')
+  endif
+endfunction
+
+" Remap for rename current word
+nmap <leader>rn <Plug>(coc-rename)
+
+" Remap for format selected region
+xmap <leader>f  <Plug>(coc-format-selected)
+nmap <leader>f  <Plug>(coc-format-selected)
+
+augroup vimx:coc.nvim
+  autocmd!
+  autocmd FileType list nmap <silent> <buffer> q :q<CR>
+augroup END
 
 " ------------------------------------------------------------------------------
 " vim-scripts/LargeFile
