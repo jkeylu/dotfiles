@@ -40,6 +40,35 @@ xterm*|rxvt*)
 esac
 
 
+# ssh agent
+SSH_AGENT_ENV="$HOME/.ssh/agent.env"
+ssh_agent_start() {
+  ssh-agent | sed 's/^echo/#echo/' > "$SSH_AGENT_ENV"
+  chmod 600 "$SSH_AGENT_ENV"
+  . "$SSH_AGENT_ENV" > /dev/null
+}
+
+ssh_agent_check() {
+  if [ -n "$SSH_AGENT_PID" ]; then
+    ps -f -u "$USERNAME" | grep "$SSH_AGENT_PID" | grep -q ssh-agent
+    if [ $? -ne 0 ]; then
+      ssh_agent_start
+    fi
+  else
+    if [ -f "$SSH_AGENT_ENV" ]; then
+      . "$SSH_AGENT_ENV" > /dev/null
+      ssh_agent_check
+
+    else
+      ssh_agent_start
+    fi
+  fi
+}
+
+ssh_agent_check
+unset SSH_AGENT_ENV
+
+
 # User configuration
 
 source $HOME/.shell_rc.sh
