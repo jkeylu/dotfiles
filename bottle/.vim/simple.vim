@@ -184,6 +184,10 @@ Plug 'idanarye/vim-merginal'
 " `:Gitv`
 " }}}
 Plug 'gregsexton/gitv', { 'on': ['Gitv'] }
+" {{{ Usage
+" `C-j` toggle terminal
+" }}}
+Plug 'jkeylu/tmux-toggle-term'
 
 " Lang
 if executable('go')
