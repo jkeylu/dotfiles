@@ -80,7 +80,7 @@ fi
 # python
 if command -v python3 &> /dev/null; then
   export PATH="$(python3 -m site --user-base)/bin:$PATH"
-else
+elif command -v python &> /dev/null; then
   export PATH="$(python -m site --user-base)/bin:$PATH"
 fi
 
