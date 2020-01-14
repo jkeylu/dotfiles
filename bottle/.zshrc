@@ -72,7 +72,7 @@ fi
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(z npm osx ssh-agent)
+plugins=(z npm osx)
 if [[ -z $SSH_CLIENT && -z $SSH_TTY ]]; then
   plugins+=(ssh-agent)
   if command -v gpg &> /dev/null; then
