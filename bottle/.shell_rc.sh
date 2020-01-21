@@ -73,7 +73,7 @@ export NVM_DIR=$HOME/.nvm
 #[[ -r $NVM_DIR/bash_completion ]] && source $NVM_DIR/bash_completion
 if [[ -f $NVM_DIR/alias/default ]]; then
   if [[ -d $NVM_DIR/versions/node/v$(cat $NVM_DIR/alias/default)/bin ]]; then
-    PATH=$NVM_DIR/versions/node/v$(cat $NVM_DIR/alias/default)/bin:$PATH
+    export PATH=$NVM_DIR/versions/node/v$(cat $NVM_DIR/alias/default)/bin:$PATH
   fi
 fi
 
@@ -85,10 +85,10 @@ elif command -v python &> /dev/null; then
 fi
 
 # go
-if command -v go &> /dev/null; then
-  export GOPATH=$HOME/Projects/go
-  export PATH=$GOPATH/bin:$PATH
-fi
+export GOPATH=$HOME/Projects/go
+export PATH=$GOPATH/bin:$PATH
+export GVM_PATH=$HOME/.gvm
+[[ -s $GVM_PATH/gvm.sh ]] && source $GVM_PATH/gvm.sh
 
 # rust
 if [[ -d $HOME/.cargo ]]; then

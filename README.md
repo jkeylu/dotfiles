@@ -16,6 +16,7 @@ wget -O - https://raw.githubusercontent.com/jkeylu/dotfiles/master/install.sh | 
 - [fzf](#fzf)
 - [git](#git)
 - [glider](#glider)
+- [gvm](#gvm)
 - [iterm2](#iterm2)
 - [kcpss](#kcpss)
 - [kcptun](#kcptun)
@@ -71,6 +72,12 @@ dotfilebiu install git
 ```sh
 dotfilebiu install glider
 dotfilebiu service install glider
+```
+
+### gvm
+
+```sh
+dotfilebiu install gvm
 ```
 
 ### iterm2

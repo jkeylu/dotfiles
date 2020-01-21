@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+
+GVM_GO_BASE_URL="${GVM_GO_MIRROR:-https://dl.google.com/go}"
+
+GVM_ALIAS_PATH="${GVM_PATH}/alias"
+GVM_ARCHIVE_PATH="${GVM_PATH}/archive"
+GVM_VERSIONS_PATH="${GVM_PATH}/versions"
+
+if [[ -s "${GVM_ALIAS_PATH}/default" ]]; then
+  GVM_DEFAULT_VERSION="$(cat "${GVM_ALIAS_PATH}/default")"
+fi
+
+gvm_help() {
+  echo "TODO"
+}
+
+version_lte() {
+  [ "$1" = "`echo -e "$1\n$2" | sort -V | head -n 1`" ]
+}
+
+gvm_list() {
+  local versions="$(ls "$GVM_VERSIONS_PATH")"
+
+  for version in $versions; do
+    if [[ $version == $GVM_DEFAULT_VERSION ]]; then
+      echo "  $version *"
+    else
+      echo "  $version"
+    fi
+  done | sort -V
+
+  echo
+}
+
+gvm_listall() {
+  local versions=$(git ls-remote -t https://github.com/golang/go | awk -F/ '{ print $NF }')
+
+  if [[ $? -ne 0 ]]; then
+    echo "Failed to get version list from https://github.com/golang/go"
+  fi
+
+  for version in $versions; do
+    if grep -q 'go[0-9]\+\.[0-9]\+\(\.[0-9]\+\)\?$' <(echo -n "$version"); then
+      if version_lte "go1.4.3" "$version"; then
+        if [[ ${version:2} == $GVM_DEFAULT_VERSION ]]; then
+          echo "  ${version:2} *"
+        else
+          echo "  ${version:2}"
+        fi
+      fi
+    fi
+  done | sort -V
+
+  echo
+}
+
+gvm_install() {
+  local version="$1"
+  local os="linux"
+  local arch="386"
+
+  if echo -n "$version" | grep -q '^go'; then
+    version="${version:2}"
+  fi
+
+  if [[ "$(uname)" == "Darwin" ]]; then
+    os="darwin"
+  fi
+
+  if [[ "$(uname -m)" == "x86_64" ]]; then
+    arch="amd64"
+  fi
+
+  local archive_file="go${version}.${os}-${arch}.tar.gz"
+  local archive_file_url="${GVM_GO_BASE_URL}/${archive_file}"
+  local archive_file_path="${GVM_ARCHIVE_PATH}/${archive_file}"
+  local install_path="${GVM_VERSIONS_PATH}/${version}/"
+
+  mkdir -p "$GVM_ARCHIVE_PATH"
+  mkdir -p "$install_path"
+
+  if [[ ! -f $archive_file_path ]]; then
+    curl -f -L -o "$archive_file_path" "$archive_file_url"
+
+    if [[ $? -ne 0 ]]; then
+      rm -f "$archive_file_path"
+      exit 1
+    fi
+  fi
+
+  tar zxvf "$archive_file_path" -C "$install_path"
+
+  if [[ $? -ne 0 ]]; then
+    rm -f "$archive_file_path"
+    rm -rf "$install_path"
+  fi
+}
+
+gvm_uninstall() {
+  local version="$1"
+
+  if echo -n "$version" | grep -q '^go'; then
+    version="${version:2}"
+  fi
+
+  if [[ -z $version ]]; then
+    echo "Wrong version: \"$version\""
+    exit 1
+  fi
+
+  local version_path="${GVM_VERSIONS_PATH}/${version}"
+  if [[ ! -d $version_path ]]; then
+    echo "Wrong version: \"$version\""
+    exit 1
+  fi
+
+  rm -rf "$version_path"
+
+  echo "version \"$version\" removed"
+}
+
+gvm_use() {
+  local version="$1"
+
+  if echo -n "$version" | grep -q '^go'; then
+    version="${version:2}"
+  fi
+
+  if [[ -z $version ]]; then
+    echo "Wrong version: \"$version\""
+    exit 1
+  fi
+
+  local default_path="${GVM_VERSIONS_PATH}/${version}/go"
+  local default_gopath_path="${GVM_VERSIONS_PATH}/${version}/GOPATH"
+  if [[ ! -d $default_path ]]; then
+    echo "Wrong version: \"$version\""
+    exit 1
+  fi
+
+  mkdir -p "$GVM_ALIAS_PATH"
+  echo -n "$version" > "${GVM_ALIAS_PATH}/default"
+
+  mkdir -p "${default_gopath_path}/bin"
+  mkdir -p "${default_gopath_path}/pkg"
+  rm -f "${GOPATH}/bin"
+  rm -f "${GOPATH}/pkg"
+  ln -s "${default_gopath_path}/bin" "${GOPATH}/bin"
+  ln -s "${default_gopath_path}/pkg" "${GOPATH}/pkg"
+}
+
+case "$1" in
+  list)
+    gvm_list
+    ;;
+  listall)
+    gvm_listall
+    ;;
+  install)
+    shift
+    gvm_install "$@"
+    ;;
+  uninstall)
+    shift
+    gvm_uninstall "$@"
+    ;;
+  use)
+    shift
+    gvm_use "$@"
+    ;;
+  *)
+    gvm_help
+    ;;
+esac
