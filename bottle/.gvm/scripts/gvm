@@ -156,6 +156,7 @@ gvm_use() {
   mkdir -p "$GVM_ALIAS_PATH"
   echo -n "$version" > "${GVM_ALIAS_PATH}/default"
 
+  mkdir -p "$GOPATH"
   mkdir -p "${default_gopath_path}/bin"
   mkdir -p "${default_gopath_path}/pkg"
   rm -f "${GOPATH}/bin"
