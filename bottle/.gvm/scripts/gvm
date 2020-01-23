@@ -11,7 +11,17 @@ if [[ -s "${GVM_ALIAS_PATH}/default" ]]; then
 fi
 
 gvm_help() {
-  echo "TODO"
+  cat << EOF
+usage: gvm <command> [<args>]
+
+commands:
+  list
+  listall
+  install <version>
+  uninstall <version>
+  use <version>
+  help
+EOF
 }
 
 version_lte() {
@@ -19,6 +29,11 @@ version_lte() {
 }
 
 gvm_list() {
+  if [[ ! -d $GVM_VERSIONS_PATH ]]; then
+    echo
+    exit 0
+  fi
+
   local versions="$(ls "$GVM_VERSIONS_PATH")"
 
   for version in $versions; do
