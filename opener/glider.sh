@@ -14,7 +14,11 @@ EOF
 
 install() {
   if [[ -x "$BIN_DIR/glider" ]]; then
-    local current_version="$($BIN_DIR/glider --version)"
+    local current_version="$($BIN_DIR/glider --help 2>&1 | grep -o 'glider \d\+\.\d\+\.\d\+')"
+    if [[ -n $current_version ]]; then
+      current_version=${current_version:7}
+      log current version: $current_version
+    fi
   fi
 
   local repo="nadoo/glider"
@@ -22,25 +26,40 @@ install() {
   log fetching latest version...
   local version=`gh_latest_tag $repo`
 
+  if [[ ${version:0:1} == "v" ]]; then
+    version=${version:1}
+  fi
+
   log remote version: $version
+
+  if [[ -z $version ]]; then
+    log fail to get remote version
+    exit 1
+  fi
+
+  if [[ $version == $current_version ]]; then
+    log "$version is latest version"
+    exit 0
+  fi
 
   local name="linux"
   if is_osx; then
-    name="macosx"
+    name="darwin"
   fi
   if uname -m | grep -q '64'; then
-    name="${name}-amd64"
+    name="${name}_amd64"
   else
-    name="${name}-386"
+    name="${name}_386"
   fi
 
-  local filename="glider-$version-$name.zip"
-  gh_download $repo $version $filename
+  local filename="glider_${version}_${name}.tar.gz"
+  gh_download $repo "v${version}" $filename
 
-  tmp_exdir="${TMPDIR}glider"
-  extract_zip "${TMPDIR}${filename}" "$tmp_exdir/"
-  mv "$tmp_exdir/glider" "$BIN_DIR"
-  chmod +x "$BIN_DIR/glider"
+  local tmp_exdir="${TMPDIR}glider"
+  mkdir -p "$tmp_exdir"
+  tar zxvf "${TMPDIR}${filename}" -C "$tmp_exdir/"
+  mv "${tmp_exdir}/glider_${version}_${name}/glider" "$BIN_DIR"
+  rm -rf "$tmp_exdir"
 }
 
 pm2_config() {
