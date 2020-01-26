@@ -516,6 +516,7 @@ augroup vimx:tab-width
   autocmd FileType javascript set shiftwidth=2 softtabstop=2
   autocmd FileType typescript set shiftwidth=4 softtabstop=4
   autocmd FileType go set noexpandtab shiftwidth=4 softtabstop=4
+  autocmd FileType yaml set shiftwidth=2 softtabstop=2
 augroup END
 
 " auto set file type

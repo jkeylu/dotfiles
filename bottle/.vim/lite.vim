@@ -16,6 +16,13 @@ set tabstop=4
 set shiftwidth=4
 set softtabstop=4
 
+autocmd FileType markdown set shiftwidth=4 softtabstop=4
+autocmd FileType python set shiftwidth=4 softtabstop=4
+autocmd FileType javascript set shiftwidth=2 softtabstop=2
+autocmd FileType typescript set shiftwidth=4 softtabstop=4
+autocmd FileType go set noexpandtab shiftwidth=4 softtabstop=4
+autocmd FileType yaml set shiftwidth=2 softtabstop=2
+
 " netrw
 let g:netrw_banner = 0    " disable annoying banner
 let g:netrw_altv = 1      " open splits to the right
