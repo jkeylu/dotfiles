@@ -12,7 +12,10 @@ Description=hdparm service
 
 [Service]
 Type=oneshot
-ExecStart=$(which hdparm) -S 241 -y /dev/sda
+# `Type=oneshot` support multiple ExecStart
+# `-S 241` 30 minutes
+# `-y` standby immediately
+ExecStart=$(which hdparm) -S 241 -y /dev/sdx
 RemainAfterExit=true
 
 [Install]
