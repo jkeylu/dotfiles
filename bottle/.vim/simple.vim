@@ -405,6 +405,9 @@ let g:LargeFile = 100
 " ------------------------------------------------------------------------------
 " fatih/vim-go
 " ------------------------------------------------------------------------------
+"let g:go_debug = ['lsp']
+let g:go_fmt_command = "goimports"
+
 augroup vimx:vim-go
   autocmd!
   autocmd FileType go call <SID>goSettings()
