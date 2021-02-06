@@ -95,6 +95,11 @@ if [[ -d $HOME/.cargo ]]; then
   export PATH=$HOME/.cargo/bin:$PATH
 fi
 
+# java
+if [[ -s /usr/libexec/java_home ]]; then
+  export JAVA_HOME="$(/usr/libexec/java_home)"
+fi
+
 # electron
 export ELECTRON_MIRROR=http://npm.taobao.org/mirrors/electron/
 
