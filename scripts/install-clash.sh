@@ -248,7 +248,7 @@ install() {
 
   gh_download $REPO $cmd_remote_tag $cmd_dl_filename
   gunzip -c "$TMP_DIR/$cmd_dl_filename" > "$cmd_path"
-  chmod u+x "$cmd_path"
+  chmod 755 "$cmd_path"
 
   save_cmd_svc_file
 

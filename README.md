@@ -141,3 +141,10 @@ dotfilebiu install vim
 dotfilebiu install zsh
 dotfilebiu run install wsl
 ```
+
+### clash
+
+```sh
+curl -sL https://raw.fastgit.org/jkeylu/dotfiles/master/scripts/install-clash.sh | bash
+```
+

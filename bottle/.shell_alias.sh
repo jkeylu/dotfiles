@@ -21,7 +21,7 @@ alias nv="nvim --cmd \"let g:custom_env = ['zmlearn']\""
 
 # proxy
 alias all_proxy="ALL_PROXY=socks5://127.0.0.1:1080"
-alias proxy_it="http_proxy=http://127.0.0.1:8088 HTTPS_PROXY=http://127.0.0.1:8088"
+alias proxy_it="http_proxy=http://127.0.0.1:1080 HTTPS_PROXY=http://127.0.0.1:1080"
 
 # cnpm
 alias cnpm="npm \
