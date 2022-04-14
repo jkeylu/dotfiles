@@ -138,6 +138,11 @@ Plug 'scrooloose/nerdcommenter'
 if executable('node')
   Plug 'neoclide/coc.nvim', { 'branch': 'release', 'for': ['javascript', 'html', 'css', 'json'] }
 endif
+" {{{ Usage
+" `<leader>tm` switch table mode
+" `<leader>tt` format existing content into a table
+" }}}
+Plug 'dhruvasagar/vim-table-mode'
 
 " File
 Plug 'vim-scripts/LargeFile'
@@ -357,6 +362,11 @@ let g:better_whitespace_filetypes_blacklist = ['diff', 'gitcommit', 'unite', 'qf
 " ------------------------------------------------------------------------------
 "let delimitMate_expand_cr = 1
 "let delimitMate_expand_space = 1
+
+" ------------------------------------------------------------------------------
+" dhruvasagar/vim-table-mode
+" ------------------------------------------------------------------------------
+let g:table_mode_corner = '|'
 
 " ------------------------------------------------------------------------------
 " neoclide/coc.nvim
