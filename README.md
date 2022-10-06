@@ -18,11 +18,7 @@ wget -O - https://raw.githubusercontent.com/jkeylu/dotfiles/master/install.sh | 
 - [glider](#glider)
 - [gvm](#gvm)
 - [iterm2](#iterm2)
-- [kcpss](#kcpss)
-- [kcptun](#kcptun)
 - [nvm](#nvm)
-- [pm2](#pm2)
-- [ss](#ss)
 - [tmux](#tmux)
 - [vim](#vim)
 - [zsh](#zsh)
@@ -86,41 +82,11 @@ dotfilebiu install gvm
 dotfilebiu install iterm2
 ```
 
-### kcpss
-
-```sh
-dotfilebiu service install kcpss client "#name" "#server" "#password"
-dotfilebiu service install kcpss server "#name" "#server" "#password"
-```
-
-### kcptun
-
-```sh
-# install or update kcptun
-dotfilebiu install kcptun
-dotfilebiu service install kcptun client "#name" "#server_ip:#server_port:12948"
-dotfilebiu service install kcptun server "#name" "#server_port:#target_port"
-```
-
 ### nvm
 
 ```sh
 dotfilebiu install nvm
 dotfilebiu run nvm update
-```
-
-### pm2
-
-```sh
-dotfilebiu install pm2
-```
-
-### ss
-
-```sh
-dotfilebiu install ss
-dotfilebiu service install ss local "#name" "#server" "#server_port" "#password"
-dotfilebiu service install ss server "#name" "#server" "#server_port" "#password"
 ```
 
 ### tmux
