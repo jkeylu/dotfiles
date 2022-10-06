@@ -21,7 +21,7 @@ install() {
     exit 0
   fi
 
-  git clone git://github.com/robbyrussell/oh-my-zsh.git ~/.oh-my-zsh
+  git clone https://github.com/ohmyzsh/ohmyzsh.git ~/.oh-my-zsh
 
   if ! command_exist zsh; then
     if is_osx; then
