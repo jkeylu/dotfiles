@@ -101,10 +101,10 @@ if [[ -s /usr/libexec/java_home ]]; then
 fi
 
 # electron
-export ELECTRON_MIRROR=http://npm.taobao.org/mirrors/electron/
+export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
 
 # puppeteer
-export PUPPETEER_DOWNLOAD_HOST=https://npm.taobao.org/mirrors/
+export PUPPETEER_DOWNLOAD_HOST=https://npmmirror.com/mirrors/
 
 
 # private shell rc

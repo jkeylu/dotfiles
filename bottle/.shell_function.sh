@@ -52,6 +52,11 @@ if [[ `uname` =~ "Darwin" ]]; then
 
   switchWifiProxy() {
     switchNetworkProxy "Wi-Fi" "$1"
+
+    if [[ -z $1 ]]; then
+      echo "\n=> Usage: switchWifiProxy [on|off]"
+      return
+    fi
   }
 fi
 
