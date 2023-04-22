@@ -84,6 +84,13 @@ elif command -v python &> /dev/null; then
   export PATH="$(python -m site --user-base)/bin:$PATH"
 fi
 
+# pyenv
+if command -v pyenv &> /dev/null; then
+  export PYENV_ROOT="$HOME/.pyenv"
+  export PATH="$PYENV_ROOT/bin:$PATH"
+  eval "$(pyenv init -)"
+fi
+
 # go
 export GOPATH=$HOME/Projects/go
 export PATH=$GOPATH/bin:$PATH
