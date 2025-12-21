@@ -12,10 +12,8 @@ wget -O - https://raw.githubusercontent.com/jkeylu/dotfiles/master/install.sh | 
 - [bash](#bash)
 - [brew](#brew)
 - [code](#code)
-- [frp](#frp)
 - [fzf](#fzf)
 - [git](#git)
-- [glider](#glider)
 - [gvm](#gvm)
 - [iterm2](#iterm2)
 - [nvm](#nvm)
@@ -42,15 +40,6 @@ dotfilebiu uninstall brew
 dotfilebiu install code
 ```
 
-### frp
-
-```sh
-dotfilebiu install frp
-dotfilebiu run frp update
-dotfilebiu service install frp [frpc|frps]
-dotfilebiu svc start [frpc|frps]
-```
-
 ### fzf
 
 ```sh
@@ -61,13 +50,6 @@ dotfilebiu install fzf
 
 ```sh
 dotfilebiu install git
-```
-
-### glider
-
-```sh
-dotfilebiu install glider
-dotfilebiu service install glider
 ```
 
 ### gvm
@@ -106,11 +88,5 @@ dotfilebiu install vim
 ```sh
 dotfilebiu install zsh
 dotfilebiu run install wsl
-```
-
-### clash
-
-```sh
-curl -sL https://raw.fastgit.org/jkeylu/dotfiles/master/scripts/install-clash.sh | bash
 ```
 
