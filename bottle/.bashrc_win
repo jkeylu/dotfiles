@@ -1,0 +1,33 @@
+# .bashrc
+
+export DOTFILES_HOME="$HOME/.dotfiles"
+
+# WSL
+if [[ -f /proc/version ]]; then
+  if cat /proc/version | grep --silent 'Microsoft'; then
+    if [[ -t 1 ]]; then
+      exec zsh
+    fi
+  fi
+fi
+
+export LOCALAPPDATA=$(cygpath -u "$LOCALAPPDATA")
+
+source "$DOTFILES_HOME/bottle/.shell_fn_win.sh"
+[[ -f "$HOME/.shell_fn.sh" ]] && source "$HOME/.shell_fn.sh"
+
+[[ -f "$HOME/.bash_start.sh" ]] && source "$HOME/.bash_start.sh"
+
+if [[ "$ENABLE_SSH_AGENT" == "1" ]] || ([[ -z "$SSH_CLIENT" ]] && [[ -z "$SSH_TTY" ]]); then
+  _ssh_agent_check
+fi
+
+
+# User configuration
+
+source "$DOTFILES_HOME/bottle/.shell_rc.sh"
+
+# fzf
+[[ -f ~/.fzf.bash ]] && (source ~/.fzf.bash &> /dev/null || echo ".fzf.bash is somthing wrong")
+
+# vim:ft=sh et ts=2 sw=2 sts=2
