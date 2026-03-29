@@ -1,0 +1,73 @@
+# User configuration
+
+if [[ ":$PATH:" != *":$HOME/.bin:"* ]]; then
+  export PATH=$HOME/.bin:$PATH
+fi
+
+# You may need to manually set your language environment
+# export LANG=en_US.UTF-8
+export LANG=zh_CN.UTF-8
+
+# Preferred editor for local and remote sessions
+# if [[ -n $SSH_CONNECTION ]]; then
+#   export EDITOR='vim'
+# else
+#   export EDITOR='mvim'
+# fi
+if command -v vim &> /dev/null; then
+  export EDITOR='vim'
+else
+  export EDITOR='vi'
+fi
+
+# Compilation flags
+# export ARCHFLAGS="-arch x86_64"
+
+# ssh
+# export SSH_KEY_PATH="~/.ssh/dsa_id"
+
+# Set personal aliases, overriding those provided by oh-my-zsh libs,
+# plugins, and themes. Aliases can be placed here, though oh-my-zsh
+# users are encouraged to define aliases within the ZSH_CUSTOM folder.
+# For a full list of active aliases, run `alias`.
+#
+# Example aliases
+# alias zshconfig="mate ~/.zshrc"
+# alias ohmyzsh="mate ~/.oh-my-zsh"
+
+# disable CTRL-D to close window
+set -o ignoreeof
+
+# vimx
+[[ -r ~/.vim/vimx.sh ]] && source ~/.vim/vimx.sh
+
+
+# nvm
+export NVM_DIR=$HOME/.nvm
+# export NVM_NODEJS_ORG_MIRROR=https://npm.taobao.org/mirrors/node
+#[[ -s $NVM_DIR/nvm.sh ]] && source $NVM_DIR/nvm.sh  # This loads nvm
+#[[ -r $NVM_DIR/bash_completion ]] && source $NVM_DIR/bash_completion
+if [[ -f $NVM_DIR/alias/default ]]; then
+  if [[ -d $NVM_DIR/versions/node/v$(cat $NVM_DIR/alias/default)/bin ]]; then
+    export PATH=$NVM_DIR/versions/node/v$(cat $NVM_DIR/alias/default)/bin:$PATH
+  fi
+fi
+
+# go
+export GOPATH=$HOME/Projects/go
+export PATH=$GOPATH/bin:$PATH
+export GVM_PATH=$HOME/.gvm
+[[ -s $GVM_PATH/gvm.sh ]] && source $GVM_PATH/gvm.sh
+
+# rust
+if [[ -d $HOME/.cargo ]]; then
+  export PATH=$HOME/.cargo/bin:$PATH
+fi
+
+# electron
+export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+
+# puppeteer
+export PUPPETEER_DOWNLOAD_HOST=https://npmmirror.com/mirrors/
+
+# vim:ft=sh et ts=2 sw=2 sts=2

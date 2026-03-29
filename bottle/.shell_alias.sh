@@ -12,8 +12,8 @@ alias dotfilebiu="~/.dotfiles/biu.sh"
 [[ -e /usr/local/bin/thefuck ]] && eval "$(thefuck --alias)"
 
 # proxy
-alias all_proxy="ALL_PROXY=socks5://127.0.0.1:1080"
-alias proxy_it="http_proxy=http://127.0.0.1:1080 HTTPS_PROXY=http://127.0.0.1:1080"
+alias all_proxy="ALL_PROXY=socks5://127.0.0.1:7890"
+alias proxy_it="http_proxy=http://127.0.0.1:7890 HTTPS_PROXY=http://127.0.0.1:7890"
 
 # cnpm
 alias cnpm="npm \
