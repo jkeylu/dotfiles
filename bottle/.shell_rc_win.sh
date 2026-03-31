@@ -54,10 +54,7 @@ if [[ -f $NVM_DIR/alias/default ]]; then
 fi
 
 # go
-export GOPATH=$HOME/Projects/go
-export PATH=$GOPATH/bin:$PATH
-export GVM_PATH=$HOME/.gvm
-[[ -s $GVM_PATH/gvm.sh ]] && source $GVM_PATH/gvm.sh
+[[ -s $HOME/.gvm/gvm.sh ]] && source $HOME/.gvm/gvm.sh
 
 # rust
 if [[ -d $HOME/.cargo ]]; then

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-GVM_GO_BASE_URL="${GVM_GO_MIRROR:-https://dl.google.com/go}"
+GVM_GO_BASE_URL="${GVM_GO_MIRROR:-https://mirrors.aliyun.com/golang/}"
 
 GVM_ALIAS_PATH="${GVM_PATH}/alias"
 GVM_ARCHIVE_PATH="${GVM_PATH}/archive"
@@ -48,37 +48,31 @@ gvm_list() {
 }
 
 gvm_listall() {
-  local versions=$(git ls-remote -t https://github.com/golang/go | awk -F/ '{ print $NF }')
-
-  if [[ $? -ne 0 ]]; then
-    echo "Failed to get version list from https://github.com/golang/go"
+  if [[ "$(uname)" == "MINGW64_NT"* ]]; then
+    start "https://go.dev/dl/"
+  elif [[ "$(uname)" == "Darwin" ]]; then
+    open "https://go.dev/dl/"
+  elif command -v "xdg-open" &> /dev/null; then
+    xdg-open "https://go.dev/dl/"
+  else
+    echo "Please open https://go.dev/dl/ to check available versions"
   fi
-
-  for version in $versions; do
-    if grep -q 'go[0-9]\+\.[0-9]\+\(\.[0-9]\+\)\?$' <(echo -n "$version"); then
-      if version_lte "go1.4.3" "$version"; then
-        if [[ ${version:2} == $GVM_DEFAULT_VERSION ]]; then
-          echo "  ${version:2} *"
-        else
-          echo "  ${version:2}"
-        fi
-      fi
-    fi
-  done | sort -V
-
-  echo
 }
 
 gvm_install() {
   local version="$1"
   local os="linux"
   local arch="386"
+  local ext="tar.gz"
 
   if echo -n "$version" | grep -q '^go'; then
     version="${version:2}"
   fi
 
-  if [[ "$(uname)" == "Darwin" ]]; then
+  if [[ "$(uname)" == "MINGW64_NT"* ]]; then
+    os="windows"
+    ext="zip"
+  elif [[ "$(uname)" == "Darwin" ]]; then
     os="darwin"
   fi
 
@@ -86,13 +80,11 @@ gvm_install() {
     arch="amd64"
   fi
 
-  local archive_file="go${version}.${os}-${arch}.tar.gz"
+  local archive_file="go${version}.${os}-${arch}.${ext}"
   local archive_file_url="${GVM_GO_BASE_URL}/${archive_file}"
   local archive_file_path="${GVM_ARCHIVE_PATH}/${archive_file}"
-  local install_path="${GVM_VERSIONS_PATH}/${version}/"
 
   mkdir -p "$GVM_ARCHIVE_PATH"
-  mkdir -p "$install_path"
 
   if [[ ! -f $archive_file_path ]]; then
     curl -f -L -o "$archive_file_path" "$archive_file_url"
@@ -103,7 +95,14 @@ gvm_install() {
     fi
   fi
 
-  tar zxvf "$archive_file_path" -C "$install_path"
+  local install_path="${GVM_VERSIONS_PATH}/${version}/"
+  mkdir -p "$install_path"
+
+  if [[ "$ext" == "zip" ]]; then
+    unzip "$archive_file_path" -d "$install_path"
+  else
+    tar zxvf "$archive_file_path" -C "$install_path"
+  fi
 
   if [[ $? -ne 0 ]]; then
     rm -f "$archive_file_path"

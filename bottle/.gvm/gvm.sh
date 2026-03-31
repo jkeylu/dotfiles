@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 
+if [[ ! -v GVM_PATH ]]; then
+  export GVM_PATH="$HOME/.gvm"
+fi
+
+if [[ ! -v GOPATH ]]; then
+  export GOPATH="$HOME/.go"
+  export PATH=$GOPATH/bin:$PATH
+fi
+
 gvm() {
   local default_alias_file="${GVM_PATH}/alias/default"
   if [[ -s $default_alias_file ]]; then

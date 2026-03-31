@@ -40,7 +40,10 @@ install() {
     fi
   fi
 
-  chsh -s /bin/zsh
+  if [[ "$SHELL" != "/bin/zsh" ]]; then
+    echo "Changing default shell to zsh..."
+    chsh -s /bin/zsh
+  fi
 }
 
 install_wsl() {

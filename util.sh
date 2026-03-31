@@ -19,8 +19,11 @@ BACKUP_DIR="$HOME/.dotfiles.bak"
 
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
 
+is_win() {
+  [[ "$(uname)" == "MINGW64_NT"* ]]
+}
 is_osx() {
-  [[ `uname` =~ "Darwin" ]]
+  [[ "$(uname)" == "Darwin" ]]
 }
 is_debian() {
   [[ -f "/etc/os-release" ]] && grep -q "debian" /etc/os-release
