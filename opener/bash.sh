@@ -10,11 +10,13 @@ EOF
 }
 
 install() {
-  link_file .shell_rc.sh
-  link_file .bashrc
-  link_file .bash_profile
-  link_file .shell_alias.sh
-  link_file .shell_function.sh
+  if is_win; then
+    link_file .bashrc_win .bashrc
+    link_file .bash_profile
+  else
+    log "Not supported"
+    exit 1
+  fi
 }
 
 run_cmd "$@"

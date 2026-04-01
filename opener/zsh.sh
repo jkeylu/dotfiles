@@ -6,15 +6,18 @@ help() {
   cat << EOF
 supported commands:
   install
-  install wsl
 EOF
 }
 
 install() {
-  link_file .shell_rc.sh
-  link_file .zshrc
-  link_file .shell_alias.sh
-  link_file .shell_function.sh
+  if is_osx; then
+    link_file .zshrc_darwin .zshrc
+  elif is_win; then
+    log "Not supported"
+    exit 1
+  else
+    link_file .zshrc_linux .zshrc
+  fi
 
   if [[ -d ~/.oh-my-zsh ]]; then
     log "oh-my-zsh already installed"
@@ -44,12 +47,6 @@ install() {
     echo "Changing default shell to zsh..."
     chsh -s /bin/zsh
   fi
-}
-
-install_wsl() {
-  link_file .bashrc
-
-  install
 }
 
 run_cmd "$@"

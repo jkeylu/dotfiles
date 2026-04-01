@@ -4,36 +4,19 @@ if [[ ":$PATH:" != *":$HOME/.bin:"* ]]; then
   export PATH=$HOME/.bin:$PATH
 fi
 
-# You may need to manually set your language environment
-# export LANG=en_US.UTF-8
+# Set system language to Chinese UTF-8
 export LANG=zh_CN.UTF-8
+# Set all locale categories to Chinese UTF-8
+export LC_ALL=zh_CN.UTF-8
+# Set less pager to use UTF-8 encoding
+export LESSCHARSET=utf-8
 
-# Preferred editor for local and remote sessions
-# if [[ -n $SSH_CONNECTION ]]; then
-#   export EDITOR='vim'
-# else
-#   export EDITOR='mvim'
-# fi
+# Preferred editor
 if command -v vim &> /dev/null; then
   export EDITOR='vim'
 else
   export EDITOR='vi'
 fi
-
-# Compilation flags
-# export ARCHFLAGS="-arch x86_64"
-
-# ssh
-# export SSH_KEY_PATH="~/.ssh/dsa_id"
-
-# Set personal aliases, overriding those provided by oh-my-zsh libs,
-# plugins, and themes. Aliases can be placed here, though oh-my-zsh
-# users are encouraged to define aliases within the ZSH_CUSTOM folder.
-# For a full list of active aliases, run `alias`.
-#
-# Example aliases
-# alias zshconfig="mate ~/.zshrc"
-# alias ohmyzsh="mate ~/.oh-my-zsh"
 
 # disable CTRL-D to close window
 set -o ignoreeof
@@ -41,10 +24,9 @@ set -o ignoreeof
 # vimx
 [[ -r ~/.vim/vimx.sh ]] && source ~/.vim/vimx.sh
 
-
 # nvm
 export NVM_DIR=$HOME/.nvm
-# export NVM_NODEJS_ORG_MIRROR=https://npm.taobao.org/mirrors/node
+export NVM_NODEJS_ORG_MIRROR=https://cdn.npmmirror.com/binaries/node
 #[[ -s $NVM_DIR/nvm.sh ]] && source $NVM_DIR/nvm.sh  # This loads nvm
 #[[ -r $NVM_DIR/bash_completion ]] && source $NVM_DIR/bash_completion
 if [[ -f $NVM_DIR/alias/default ]]; then

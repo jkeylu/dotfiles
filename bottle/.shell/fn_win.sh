@@ -1,5 +1,3 @@
-source "$DOTFILES_HOME/bottle/.shell_fn_shared.sh"
-
 # ssh agent
 SSH_AGENT_ENV="$HOME/.ssh/agent.env"
 _ssh_agent_start() {
@@ -35,23 +33,23 @@ _pvm_ls() {
 
 _pvm_use() {
   local version="$1"
-  
+
   if [[ -z "$version" ]]; then
     echo "Usage: pvm use <version>"
     return 1
   fi
-  
+
   if [[ -n "$PYTHON_HOME" ]]; then
     _pvm_unuse
   fi
-  
+
   local python_path="$LOCALAPPDATA/Programs/Python/Python$version"
-  
+
   if [[ ! -d "$python_path" ]]; then
     echo "Error: Python version $version not found at $python_path"
     return 1
   fi
-  
+
   export PYTHON_HOME="$python_path"
   _path_add "$PYTHON_HOME"
   _path_add "$PYTHON_HOME/Scripts"
@@ -63,7 +61,7 @@ _pvm_unuse() {
   if [[ -n "$PYTHON_HOME" ]]; then
     _path_remove "$PYTHON_HOME/Scripts"
     _path_remove "$PYTHON_HOME"
-    
+
     echo "Deactivated Python at $PYTHON_HOME"
 
     unset PYTHON_HOME

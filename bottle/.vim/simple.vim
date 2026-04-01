@@ -496,7 +496,11 @@ set modelines=1
 set wrap
 set nolist
 set linebreak
-let &showbreak = '↳ '
+try
+  let &showbreak = '↳ '
+catch /E595/
+  let &showbreak = '-> '
+endtry
 
 " auto open quickfix
 augroup vimx:quickfix

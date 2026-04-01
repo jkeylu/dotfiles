@@ -1,6 +1,7 @@
 # .bashrc
 
 export DOTFILES_HOME="$HOME/.dotfiles"
+export DOTFILES_BOTTLE="$DOTFILES_HOME/bottle"
 
 # WSL
 if [[ -f /proc/version ]]; then
@@ -13,23 +14,19 @@ fi
 
 export LOCALAPPDATA=$(cygpath -u "$LOCALAPPDATA")
 
-source "$DOTFILES_HOME/bottle/.shell_fn_win.sh"
+[[ -f "$HOME/.shell_rc_pre.sh" ]] && source "$HOME/.shell_rc_pre.sh"
 
-[[ -f "$HOME/.shell_fn.sh" ]] && source "$HOME/.shell_fn.sh"
-[[ -f "$HOME/.bash_start.sh" ]] && source "$HOME/.bash_start.sh"
+source "$DOTFILES_BOTTLE/.shell/fn_common.sh"
+source "$DOTFILES_BOTTLE/.shell/fn_win.sh"
 
 if [[ "$ENABLE_SSH_AGENT" == "1" ]] || ([[ -z "$SSH_CLIENT" ]] && [[ -z "$SSH_TTY" ]]); then
   _ssh_agent_check
 fi
 
-
-# User configuration
-
-source "$DOTFILES_HOME/bottle/.shell_rc.sh"
-source "$DOTFILES_HOME/bottle/.shell_alias.sh"
+source "$DOTFILES_BOTTLE/.shell/rc_common.sh"
+source "$DOTFILES_BOTTLE/.shell/alias.sh"
 
 [[ -f "$HOME/.shell_rc.sh" ]] && source "$HOME/.shell_rc.sh"
-[[ -f "$HOME/.shell_alias.sh" ]] && source "$HOME/.shell_alias.sh"
 
 # fzf
 [[ -f ~/.fzf.bash ]] && (source ~/.fzf.bash &> /dev/null || echo ".fzf.bash is somthing wrong")

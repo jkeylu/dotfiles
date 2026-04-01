@@ -108,13 +108,16 @@ is_link_file() {
 }
 
 link_file() {
-  local name="$1"
-  if [[ "/" = ${name:0-1:1} ]]; then
-    name="${name%?}"
+  local bottle_file_name="$1"
+  # remove trailing slash if exists
+  if [[ "/" = ${bottle_file_name:0-1:1} ]]; then
+    bottle_file_name="${bottle_file_name%?}"
   fi
 
-  local bottle_file="$BOTTLE_DIR/$name"
-  local link_name="$HOME/$name"
+  local link_file_name="${2:-$bottle_file_name}"
+
+  local bottle_file="$BOTTLE_DIR/$bottle_file_name"
+  local link_name="$HOME/$link_file_name"
 
   if [[ ! -d ${link_name%/*} ]]; then
     mkdir -p "${link_name%/*}"
@@ -127,7 +130,7 @@ link_file() {
     fi
   fi
 
-  backup "$1"
+  backup "${2:-$1}"
 
   print_run ln -s "$bottle_file" "$link_name"
 }
