@@ -3,17 +3,6 @@
 export DOTFILES_HOME="$HOME/.dotfiles"
 export DOTFILES_BOTTLE="$DOTFILES_HOME/bottle"
 
-# WSL
-if [[ -f /proc/version ]]; then
-  if cat /proc/version | grep --silent 'Microsoft'; then
-    if [[ -t 1 ]]; then
-      exec zsh
-    fi
-  fi
-fi
-
-export LOCALAPPDATA=$(cygpath -u "$LOCALAPPDATA")
-
 [[ -f "$HOME/.shell_rc_pre.sh" ]] && source "$HOME/.shell_rc_pre.sh"
 
 source "$DOTFILES_BOTTLE/.shell/fn_common.sh"
@@ -22,6 +11,8 @@ source "$DOTFILES_BOTTLE/.shell/fn_win.sh"
 if [[ "$ENABLE_SSH_AGENT" == "1" ]] || ([[ -z "$SSH_CLIENT" ]] && [[ -z "$SSH_TTY" ]]); then
   _ssh_agent_check
 fi
+
+/c/Windows/System32/chcp.com 65001 > /dev/null 2>&1
 
 source "$DOTFILES_BOTTLE/.shell/rc_common.sh"
 source "$DOTFILES_BOTTLE/.shell/alias.sh"

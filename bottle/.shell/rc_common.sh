@@ -4,6 +4,9 @@ if [[ ":$PATH:" != *":$HOME/.bin:"* ]]; then
   export PATH=$HOME/.bin:$PATH
 fi
 
+# If an error occurred "can't set the locale", execute the following commands:
+# 1. `locale -a` to view the list of supported locales on your system
+# 2. `sudo locale-gen zh_CN.UTF-8` to generate the zh_CN.UTF-8 locale
 # Set system language to Chinese UTF-8
 export LANG=zh_CN.UTF-8
 # Set all locale categories to Chinese UTF-8

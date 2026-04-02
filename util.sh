@@ -133,6 +133,14 @@ link_file() {
   backup "${2:-$1}"
 
   print_run ln -s "$bottle_file" "$link_name"
+
+  if is_win; then
+    echo ""
+    echo "Note: If you are using Windows, please make sure Developer Mode is enabled to allow creating symbolic links without admin privileges."
+    echo "Alternatively, you can manually create the symbolic link with the following command:"
+    echo "mklink $(cygpath -w $link_name) $(cygpath -w $bottle_file)"
+    echo ""
+  fi
 }
 
 restore_file() {

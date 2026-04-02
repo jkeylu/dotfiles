@@ -28,7 +28,7 @@ _ssh_agent_check() {
 }
 
 _pvm_ls() {
-  ls "$LOCALAPPDATA/Programs/Python" | grep '^Python' | sed 's/^Python//' | sed 's/\/$//'
+  ls "$(cygpath -u "$LOCALAPPDATA")/Programs/Python" | grep '^Python' | sed 's/^Python//' | sed 's/\/$//'
 }
 
 _pvm_use() {
@@ -43,7 +43,7 @@ _pvm_use() {
     _pvm_unuse
   fi
 
-  local python_path="$LOCALAPPDATA/Programs/Python/Python$version"
+  local python_path="$(cygpath -u "$LOCALAPPDATA")/Programs/Python/Python$version"
 
   if [[ ! -d "$python_path" ]]; then
     echo "Error: Python version $version not found at $python_path"
