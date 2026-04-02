@@ -14,8 +14,8 @@ install() {
     link_file .bashrc_win .bashrc
     link_file .bash_profile
   else
-    log "Not supported"
-    exit 1
+    link_file .bashrc
+    link_file .bash_profile
   fi
 }
 

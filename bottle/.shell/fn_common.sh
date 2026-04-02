@@ -56,3 +56,11 @@ chvimrc() {
 lvim() {
   vim -u ~/.vim/lite.vim "$@"
 }
+
+itmux() {
+  if ! tmux ls &> /dev/null; then
+    tmux new -s Default
+  elif ! tmux ls | grep --quiet '(attached)'; then
+    tmux attach -t Default || tmux new -s Default
+  fi
+}

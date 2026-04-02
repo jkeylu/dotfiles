@@ -86,6 +86,7 @@ export DOTFILES_BOTTLE="$DOTFILES_HOME/bottle"
 [[ -f "$HOME/.shell_rc_pre.sh" ]] && source "$HOME/.shell_rc_pre.sh"
 
 source "$DOTFILES_BOTTLE/.shell/fn_common.sh"
+source "$DOTFILES_BOTTLE/.shell/fn_darwin.sh"
 source "$DOTFILES_BOTTLE/.shell/rc_common.sh"
 source "$DOTFILES_BOTTLE/.shell/alias.sh"
 
