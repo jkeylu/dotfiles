@@ -107,6 +107,21 @@ is_link_file() {
   return 1 # false
 }
 
+create_symbolic_link() {
+  local target="$1"
+  local link_name="$2"
+
+  if is_win; then
+    echo ""
+    echo "Note: If you are using Windows, please make sure Developer Mode is enabled to allow creating symbolic links without admin privileges."
+    echo "      Alternatively, you can manually create the symbolic link with the following command:"
+    echo "      mklink $(cygpath -w "$link_name") $([[ -d "$target" ]] && echo "/D ")$(cygpath -w "$target")"
+    echo ""
+  fi
+
+  print_run ln -s "$target" "$link_name"
+}
+
 link_file() {
   local bottle_file_name="$1"
   # remove trailing slash if exists
@@ -132,15 +147,7 @@ link_file() {
 
   backup "${2:-$1}"
 
-  print_run ln -s "$bottle_file" "$link_name"
-
-  if is_win; then
-    echo ""
-    echo "Note: If you are using Windows, please make sure Developer Mode is enabled to allow creating symbolic links without admin privileges."
-    echo "Alternatively, you can manually create the symbolic link with the following command:"
-    echo "mklink $(cygpath -w $link_name) $(cygpath -w $bottle_file)"
-    echo ""
-  fi
+  create_symbolic_link "$bottle_file" "$link_name"
 }
 
 restore_file() {
@@ -216,47 +223,6 @@ run_cmd() {
   else
     help
   fi
-}
-
-check_launch_agents_config() {
-  if [[ -e "$LAUNCH_AGENTS/$1.plist" ]]; then
-    log "$1.plist is exists"
-    exit 0
-  fi
-}
-
-check_pm2_config() {
-  if [[ -e "$CONFIG_DIR/pm2/$1.config.js" ]]; then
-    log "pm2/$1.config.js is exists"
-    exit 0
-  fi
-}
-
-create_pm2_config() {
-  local PM2_CONFIG_DIR="$CONFIG_DIR/pm2"
-  [[ -d $PM2_CONFIG_DIR ]] || mkdir "$PM2_CONFIG_DIR"
-
-  local name="$1"
-  local file_path="$PM2_CONFIG_DIR/$name.config.js"
-  local script="$2"
-  local args="$3"
-
-  log "create pm2 config: $file_path"
-
-  cat > "$file_path" << EOF
-module.exports = {
-  apps: [
-    {
-      name: '$name',
-      script: '$script',
-      args: '$args',
-      log_date_format: 'YYMMDD HH:mm:ss Z'
-    }
-  ]
-};
-EOF
-
-  log "Start Service Run: dotfilebiu svc start $name"
 }
 
 extract_zip() {

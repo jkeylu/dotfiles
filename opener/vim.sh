@@ -25,8 +25,7 @@ install() {
     rm ~/.vimrc
   fi
 
-  log ln -s ~/.vim/simple.vim ~/.vimrc
-  ln -s ~/.vim/simple.vim ~/.vimrc
+  create_symbolic_link ~/.vim/simple.vim ~/.vimrc
 }
 
 run_cmd "$@"
