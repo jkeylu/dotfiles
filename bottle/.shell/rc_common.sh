@@ -3,6 +3,9 @@
 if [[ ":$PATH:" != *":$HOME/.bin:"* ]]; then
   export PATH=$HOME/.bin:$PATH
 fi
+if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+  export PATH=$HOME/.local/bin:$PATH
+fi
 
 # If an error occurred "can't set the locale", execute the following commands:
 # 1. `locale -a` to view the list of supported locales on your system
@@ -23,9 +26,6 @@ fi
 
 # disable CTRL-D to close window
 set -o ignoreeof
-
-# vimx
-[[ -r ~/.vim/vimx.sh ]] && source ~/.vim/vimx.sh
 
 # nvm
 export NVM_DIR=$HOME/.nvm

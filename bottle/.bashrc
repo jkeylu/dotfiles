@@ -7,7 +7,7 @@ export DOTFILES_BOTTLE="$DOTFILES_HOME/bottle"
 
 source "$DOTFILES_BOTTLE/.shell/fn_common.sh"
 
-if [[ "$ENABLE_SSH_AGENT" == "1" ]] || ([[ -z "$SSH_CLIENT" ]] && [[ -z "$SSH_TTY" ]]); then
+if [[ "${ENABLE_SSH_AGENT:-1}" == "1" ]] && ([[ -z "$SSH_CLIENT" ]] && [[ -z "$SSH_TTY" ]]); then
   _ssh_agent_check
 fi
 

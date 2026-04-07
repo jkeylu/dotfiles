@@ -10,6 +10,34 @@ _path_remove() {
 	export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "^${p}$" | tr '\n' ':' | sed 's/:$//')
 }
 
+# ssh agent
+SSH_AGENT_ENV="$HOME/.ssh/agent.env"
+_ssh_agent_start() {
+  ssh-agent | sed 's/^echo/#echo/' > "$SSH_AGENT_ENV"
+  chmod 600 "$SSH_AGENT_ENV"
+  . "$SSH_AGENT_ENV" > /dev/null
+}
+
+_ssh_agent_check() {
+  if [[ -n "$SSH_AGENT_PID" ]]; then
+    local username="$USERNAME"
+    if [[ -z $username ]]; then
+      username="$(whoami)"
+    fi
+    ps -f -u "$username" | grep "$SSH_AGENT_PID" | grep -q ssh-agent
+    if [[ $? -ne 0 ]]; then
+      _ssh_agent_start
+    fi
+  else
+    if [[ -s "$SSH_AGENT_ENV" ]]; then
+      . "$SSH_AGENT_ENV" > /dev/null
+      _ssh_agent_check
+    else
+      _ssh_agent_start
+    fi
+  fi
+}
+
 nvm() {
   if [[ -s "$NVM_DIR/nvm.sh" ]]; then
     source "$NVM_DIR/nvm.sh"  # This loads nvm

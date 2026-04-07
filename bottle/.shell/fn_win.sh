@@ -1,32 +1,4 @@
-# ssh agent
-SSH_AGENT_ENV="$HOME/.ssh/agent.env"
-_ssh_agent_start() {
-  ssh-agent | sed 's/^echo/#echo/' > "$SSH_AGENT_ENV"
-  chmod 600 "$SSH_AGENT_ENV"
-  . "$SSH_AGENT_ENV" > /dev/null
-}
-
-_ssh_agent_check() {
-  if [[ -n "$SSH_AGENT_PID" ]]; then
-    local username="$USERNAME"
-    if [[ -z $username ]]; then
-      username="$(whoami)"
-    fi
-    ps -f -u "$username" | grep "$SSH_AGENT_PID" | grep -q ssh-agent
-    if [[ $? -ne 0 ]]; then
-      _ssh_agent_start
-    fi
-  else
-    if [[ -s "$SSH_AGENT_ENV" ]]; then
-      . "$SSH_AGENT_ENV" > /dev/null
-      _ssh_agent_check
-
-    else
-      _ssh_agent_start
-    fi
-  fi
-}
-
+# python version manager for windows
 _pvm_ls() {
   ls "$(cygpath -u "$LOCALAPPDATA")/Programs/Python" | grep '^Python' | sed 's/^Python//' | sed 's/\/$//'
 }
