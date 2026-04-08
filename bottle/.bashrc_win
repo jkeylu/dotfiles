@@ -19,7 +19,4 @@ source "$DOTFILES_BOTTLE/.shell/alias.sh"
 
 [[ -f "$HOME/.shell_rc.sh" ]] && source "$HOME/.shell_rc.sh"
 
-# fzf
-[[ -f ~/.fzf.bash ]] && (source ~/.fzf.bash &> /dev/null || echo ".fzf.bash is somthing wrong")
-
 # vim:ft=sh et ts=2 sw=2 sts=2

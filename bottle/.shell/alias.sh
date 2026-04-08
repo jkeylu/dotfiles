@@ -21,4 +21,10 @@ if ! command -v cnpm &> /dev/null; then
               --userconfig=$HOME/.cnpmrc"
 fi
 
+# in mintty on Git Bash
+if [[ $- == *i* && "$MSYSTEM" == "MINGW64" && "$TERM" == xterm* ]] && (command -v winpty &> /dev/null); then
+  alias node="winpty node"
+  alias python="winpty python"
+fi
+
 # vim:ft=sh et ts=2 sw=2 sts=2

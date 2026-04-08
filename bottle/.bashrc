@@ -17,6 +17,8 @@ source "$DOTFILES_BOTTLE/.shell/alias.sh"
 [[ -f "$HOME/.shell_rc.sh" ]] && source "$HOME/.shell_rc.sh"
 
 # fzf
-[[ -f ~/.fzf.bash ]] && (source ~/.fzf.bash &> /dev/null || echo ".fzf.bash is somthing wrong")
+if [[ "${FZF_AUTO_COMPLETION:-1}" != "0" ]] && (command -v fzf &> /dev/null); then
+  eval "$(fzf --bash)"
+fi
 
 # vim:ft=sh et ts=2 sw=2 sts=2

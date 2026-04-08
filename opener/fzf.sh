@@ -10,15 +10,16 @@ EOF
 }
 
 install() {
-  link_file .fzf.zsh
-  link_file .fzf.bash
-
   check_command fzf
 
   if is_osx; then
     ensure_command brew
 
     print_run brew install fzf
+  else
+    mkdir -p "$HOME/.local"
+    cd "$HOME/.local"
+    curl -sL https://raw.githubusercontent.com/junegunn/fzf/refs/heads/master/install | bash -s -- --bin
   fi
 }
 
