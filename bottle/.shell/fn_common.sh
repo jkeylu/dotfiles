@@ -42,7 +42,7 @@ nvm() {
   if [[ -s "$NVM_DIR/nvm.sh" ]]; then
     source "$NVM_DIR/nvm.sh"  # This loads nvm
     [[ -r "$NVM_DIR/bash_completion" ]] && source "$NVM_DIR/bash_completion"
-    nvm $@
+    nvm "$@"
   else
     echo "nvm is not installed"
   fi

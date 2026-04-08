@@ -27,6 +27,23 @@ fi
 # disable CTRL-D to close window
 set -o ignoreeof
 
+if [[ "$SHELL" == *"/bin/bash" ]]; then
+  # Use Up/Down arrow keys to search command history matching the current input
+  bind '"\e[A": history-search-backward'
+  bind '"\e[B": history-search-forward'
+
+  # Use Ctrl+Arrow keys to move cursor word by word
+  bind '"\e[1;5C": forward-word'   # Ctrl+Right
+  bind '"\e[1;5D": backward-word'  # Ctrl+Left
+
+  # Readline completion: case-insensitive, show all matches immediately,
+  # display and highlight common prefix when cycling completions
+  bind "set completion-ignore-case on"
+  bind "set show-all-if-ambiguous on"
+  bind "set menu-complete-display-prefix on"
+  bind "set colored-completion-prefix on"
+fi
+
 # nvm
 export NVM_DIR=$HOME/.nvm
 export NVM_NODEJS_ORG_MIRROR=https://cdn.npmmirror.com/binaries/node
