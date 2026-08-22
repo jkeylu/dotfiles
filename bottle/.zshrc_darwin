@@ -73,6 +73,7 @@ if [[ -z $SSH_CLIENT && -z $SSH_TTY ]]; then
   if command -v gpg &> /dev/null; then
     plugins+=(gpg-agent)
   fi
+  zstyle :omz:plugins:ssh-agent lazy yes
   zstyle :omz:plugins:ssh-agent lifetime 14h
 fi
 

@@ -10,14 +10,13 @@ EOF
 }
 
 install() {
-  check_command conda
-
-  if is_osx; then
-    print_run brew install --cask miniforge
-
-  else
-    log "please install miniforge"
+  if [[ -d "$HOME/.local/miniforge3" ]]; then
+    log "miniforge already installed"
+    exit 0
   fi
+
+  curl -L -o "$HOME/Miniforge3-$(uname)-$(uname -m).sh" "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
+  bash "$HOME/Miniforge3-$(uname)-$(uname -m).sh" -b -p "$HOME/.local/miniforge3"
 }
 
 run_cmd "$@"

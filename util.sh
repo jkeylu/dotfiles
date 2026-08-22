@@ -112,10 +112,21 @@ create_symbolic_link() {
   local link_name="$2"
 
   if is_win; then
+    if [[ -d "$target" ]]; then
+      # Windows: use mklink /J for directories (junctions don't require admin privileges)
+      # MSYS_NO_PATHCONV prevents Git Bash from converting /c to a Windows path
+      local win_link win_target
+      win_link="$(cygpath -w "$link_name")"
+      win_target="$(cygpath -w "$target")"
+      log mklink /J "$win_link" "$win_target"
+      MSYS_NO_PATHCONV=1 cmd.exe /c mklink /J "$win_link" "$win_target"
+      return
+    fi
+
     echo ""
     echo "Note: If you are using Windows, please make sure Developer Mode is enabled to allow creating symbolic links without admin privileges."
     echo "      Alternatively, you can manually create the symbolic link with the following command:"
-    echo "      mklink $(cygpath -w "$link_name") $([[ -d "$target" ]] && echo "/D ")$(cygpath -w "$target")"
+    echo "      mklink $(cygpath -w "$link_name") $(cygpath -w "$target")"
     echo ""
   fi
 
