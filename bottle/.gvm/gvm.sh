@@ -9,6 +9,8 @@ if [[ ! -v GOPATH ]]; then
   export PATH=$GOPATH/bin:$PATH
 fi
 
+export GOPROXY="${GOPROXY:-https://mirrors.aliyun.com/goproxy/,direct}"
+
 gvm() {
   local default_alias_file="${GVM_PATH}/alias/default"
   if [[ -s $default_alias_file ]]; then
