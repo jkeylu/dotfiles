@@ -96,12 +96,12 @@ _win_env_sync_current_shell() {
   fi
 }
 
-win_env_add() {
+win_env_set() {
   local name="$1"
   local value="$2"
 
   if ! _win_env_name_valid "$name" || [[ $# -ne 2 ]]; then
-    echo "Usage: win_env_add <name> <value>" >&2
+    echo "Usage: win_env_set <name> <value>" >&2
     return 1
   fi
 
