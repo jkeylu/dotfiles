@@ -27,7 +27,7 @@ fi
 # disable CTRL-D to close window
 set -o ignoreeof
 
-if [[ "$SHELL" == *"/bin/bash" ]]; then
+if [[ "$SHELL" == *"/bin/bash" && $- == *i* ]]; then
   # Use Up/Down arrow keys to search command history matching the current input
   bind '"\e[A": history-search-backward'
   bind '"\e[B": history-search-forward'
