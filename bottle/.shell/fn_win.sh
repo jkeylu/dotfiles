@@ -72,3 +72,101 @@ pvm() {
       ;;
   esac
 }
+
+# Windows current-user environment variables. Changes are persistent and take
+# effect in newly started Windows processes; the current Bash process is also
+# updated when the variable name is a valid shell identifier.
+_win_powershell() {
+  powershell.exe -NoProfile -NonInteractive -Command "$1"
+}
+
+_win_env_name_valid() {
+  [[ -n "$1" && "$1" != *"="* ]]
+}
+
+_win_env_sync_current_shell() {
+  local name="$1"
+  local value="$2"
+
+  # Windows PATH uses semicolons, so never replace Bash's colon-separated PATH.
+  [[ "$name" =~ ^[Pp][Aa][Tt][Hh]$ ]] && return 0
+
+  if [[ "$name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+    export "$name=$value"
+  fi
+}
+
+win_env_add() {
+  local name="$1"
+  local value="$2"
+
+  if ! _win_env_name_valid "$name" || [[ $# -ne 2 ]]; then
+    echo "Usage: win_env_add <name> <value>" >&2
+    return 1
+  fi
+
+  _DOTFILES_WIN_ENV_NAME="$name" _DOTFILES_WIN_ENV_VALUE="$value" _win_powershell '[Environment]::SetEnvironmentVariable($env:_DOTFILES_WIN_ENV_NAME, $env:_DOTFILES_WIN_ENV_VALUE, [EnvironmentVariableTarget]::User)' || return
+  _win_env_sync_current_shell "$name" "$value"
+}
+
+win_env_rm() {
+  local name="$1"
+
+  if ! _win_env_name_valid "$name" || [[ $# -ne 1 ]]; then
+    echo "Usage: win_env_rm <name>" >&2
+    return 1
+  fi
+
+  _DOTFILES_WIN_ENV_NAME="$name" _win_powershell '[Environment]::SetEnvironmentVariable($env:_DOTFILES_WIN_ENV_NAME, $null, [EnvironmentVariableTarget]::User)' || return
+
+  if [[ ! "$name" =~ ^[Pp][Aa][Tt][Hh]$ && "$name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+    unset "$name"
+  fi
+}
+
+win_env() {
+  local name="$1"
+
+  if [[ $# -gt 1 ]] || { [[ $# -eq 1 ]] && ! _win_env_name_valid "$name"; }; then
+    echo "Usage: win_env [name]" >&2
+    return 1
+  fi
+
+  if [[ $# -eq 1 ]]; then
+    _DOTFILES_WIN_ENV_NAME="$name" _win_powershell '$name = $env:_DOTFILES_WIN_ENV_NAME; $value = [Environment]::GetEnvironmentVariable($name, [EnvironmentVariableTarget]::User); if ($null -ne $value) { "{0}={1}" -f $name, $value }'
+  else
+    _win_powershell '[Environment]::GetEnvironmentVariables([EnvironmentVariableTarget]::User).GetEnumerator() | Sort-Object Name | ForEach-Object { "{0}={1}" -f $_.Key, $_.Value }'
+  fi
+}
+
+win_path() {
+  if [[ $# -ne 0 ]]; then
+    echo "Usage: win_path" >&2
+    return 1
+  fi
+
+  _win_powershell '$current = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User); if ($null -ne $current) { $current -split ";" | Where-Object { $_ -ne "" } }'
+}
+
+win_path_add() {
+  local path="$1"
+
+  if [[ -z "$path" || $# -ne 1 ]]; then
+    echo "Usage: win_path_add <path>" >&2
+    return 1
+  fi
+
+  _DOTFILES_WIN_PATH_ENTRY="$path" _win_powershell '$entry = $env:_DOTFILES_WIN_PATH_ENTRY; $current = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User); $items = @($current -split ";" | Where-Object { $_ -ne "" }); if (-not ($items | Where-Object { $_ -ieq $entry })) { $items += $entry; [Environment]::SetEnvironmentVariable("Path", ($items -join ";"), [EnvironmentVariableTarget]::User) }'
+}
+
+win_path_rm() {
+  local path="$1"
+
+  if [[ -z "$path" || $# -ne 1 ]]; then
+    echo "Usage: win_path_rm <path>" >&2
+    return 1
+  fi
+
+  _DOTFILES_WIN_PATH_ENTRY="$path" _win_powershell '$entry = $env:_DOTFILES_WIN_PATH_ENTRY; $current = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User); if ($null -ne $current) { $items = @($current -split ";" | Where-Object { $_ -ne "" -and $_ -ine $entry }); $newValue = $items -join ";"; [Environment]::SetEnvironmentVariable("Path", $(if ($newValue) { $newValue } else { $null }), [EnvironmentVariableTarget]::User) }'
+}
+
