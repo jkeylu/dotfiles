@@ -156,7 +156,57 @@ win_path_add() {
     return 1
   fi
 
-  _DOTFILES_WIN_PATH_ENTRY="$path" _win_powershell '$entry = $env:_DOTFILES_WIN_PATH_ENTRY; $current = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User); $items = @($current -split ";" | Where-Object { $_ -ne "" }); if (-not ($items | Where-Object { $_ -ieq $entry })) { $items += $entry; [Environment]::SetEnvironmentVariable("Path", ($items -join ";"), [EnvironmentVariableTarget]::User) }'
+  _DOTFILES_WIN_PATH_ENTRY="$path" _win_powershell '
+    foreach ($target in @([EnvironmentVariableTarget]::Machine, [EnvironmentVariableTarget]::User)) {
+      $variables = [Environment]::GetEnvironmentVariables($target)
+      foreach ($key in $variables.Keys) {
+        if ($key -ine "Path") {
+          [Environment]::SetEnvironmentVariable($key, $variables[$key], [EnvironmentVariableTarget]::Process)
+        }
+      }
+    }
+
+    function Expand-PathEntry([string]$value, [bool]$required) {
+      for ($i = 0; $i -lt 10; $i++) {
+        $expanded = [Environment]::ExpandEnvironmentVariables($value)
+        if ($expanded -eq $value) { break }
+        $value = $expanded
+      }
+      if ($required -and $value -match "%[^%]+%") {
+        throw "Cannot resolve environment variable in path: $value"
+      }
+      return $value
+    }
+
+    $entry = Expand-PathEntry $env:_DOTFILES_WIN_PATH_ENTRY $true
+    $current = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
+    $items = @($current -split ";" | Where-Object { $_ -ne "" })
+    $newItems = @()
+    $found = $false
+    $changed = $false
+
+    foreach ($item in $items) {
+      if ((Expand-PathEntry $item $false) -ieq $entry) {
+        if (-not $found) {
+          $newItems += $entry
+          $found = $true
+          if ($item -cne $entry) { $changed = $true }
+        } else {
+          $changed = $true
+        }
+      } else {
+        $newItems += $item
+      }
+    }
+
+    if (-not $found) {
+      $newItems += $entry
+      $changed = $true
+    }
+    if ($changed) {
+      [Environment]::SetEnvironmentVariable("Path", ($newItems -join ";"), [EnvironmentVariableTarget]::User)
+    }
+  ' || return
 }
 
 win_path_rm() {
@@ -167,6 +217,36 @@ win_path_rm() {
     return 1
   fi
 
-  _DOTFILES_WIN_PATH_ENTRY="$path" _win_powershell '$entry = $env:_DOTFILES_WIN_PATH_ENTRY; $current = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User); if ($null -ne $current) { $items = @($current -split ";" | Where-Object { $_ -ne "" -and $_ -ine $entry }); $newValue = $items -join ";"; [Environment]::SetEnvironmentVariable("Path", $(if ($newValue) { $newValue } else { $null }), [EnvironmentVariableTarget]::User) }'
-}
+  _DOTFILES_WIN_PATH_ENTRY="$path" _win_powershell '
+    foreach ($target in @([EnvironmentVariableTarget]::Machine, [EnvironmentVariableTarget]::User)) {
+      $variables = [Environment]::GetEnvironmentVariables($target)
+      foreach ($key in $variables.Keys) {
+        if ($key -ine "Path") {
+          [Environment]::SetEnvironmentVariable($key, $variables[$key], [EnvironmentVariableTarget]::Process)
+        }
+      }
+    }
 
+    function Expand-PathEntry([string]$value, [bool]$required) {
+      for ($i = 0; $i -lt 10; $i++) {
+        $expanded = [Environment]::ExpandEnvironmentVariables($value)
+        if ($expanded -eq $value) { break }
+        $value = $expanded
+      }
+      if ($required -and $value -match "%[^%]+%") {
+        throw "Cannot resolve environment variable in path: $value"
+      }
+      return $value
+    }
+
+    $entry = Expand-PathEntry $env:_DOTFILES_WIN_PATH_ENTRY $true
+    $current = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
+    if ($null -ne $current) {
+      $items = @($current -split ";" | Where-Object {
+        $_ -ne "" -and (Expand-PathEntry $_ $false) -ine $entry
+      })
+      $newValue = $items -join ";"
+      [Environment]::SetEnvironmentVariable("Path", $(if ($newValue) { $newValue } else { $null }), [EnvironmentVariableTarget]::User)
+    }
+  ' || return
+}
