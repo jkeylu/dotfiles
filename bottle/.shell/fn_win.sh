@@ -84,46 +84,6 @@ _win_env_name_valid() {
   [[ -n "$1" && "$1" != *"="* ]]
 }
 
-_win_env_sync_current_shell() {
-  local name="$1"
-  local value="$2"
-
-  # Windows PATH uses semicolons, so never replace Bash's colon-separated PATH.
-  [[ "$name" =~ ^[Pp][Aa][Tt][Hh]$ ]] && return 0
-
-  if [[ "$name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-    export "$name=$value"
-  fi
-}
-
-win_env_set() {
-  local name="$1"
-  local value="$2"
-
-  if ! _win_env_name_valid "$name" || [[ $# -ne 2 ]]; then
-    echo "Usage: win_env_set <name> <value>" >&2
-    return 1
-  fi
-
-  _DOTFILES_WIN_ENV_NAME="$name" _DOTFILES_WIN_ENV_VALUE="$value" _win_powershell '[Environment]::SetEnvironmentVariable($env:_DOTFILES_WIN_ENV_NAME, $env:_DOTFILES_WIN_ENV_VALUE, [EnvironmentVariableTarget]::User)' || return
-  _win_env_sync_current_shell "$name" "$value"
-}
-
-win_env_rm() {
-  local name="$1"
-
-  if ! _win_env_name_valid "$name" || [[ $# -ne 1 ]]; then
-    echo "Usage: win_env_rm <name>" >&2
-    return 1
-  fi
-
-  _DOTFILES_WIN_ENV_NAME="$name" _win_powershell '[Environment]::SetEnvironmentVariable($env:_DOTFILES_WIN_ENV_NAME, $null, [EnvironmentVariableTarget]::User)' || return
-
-  if [[ ! "$name" =~ ^[Pp][Aa][Tt][Hh]$ && "$name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-    unset "$name"
-  fi
-}
-
 win_env() {
   local name="$1"
 
@@ -137,6 +97,61 @@ win_env() {
   else
     _win_powershell '[Environment]::GetEnvironmentVariables([EnvironmentVariableTarget]::User).GetEnumerator() | Sort-Object Name | ForEach-Object { "{0}={1}" -f $_.Key, $_.Value }'
   fi
+}
+
+win_env_set() {
+  local name="$1"
+  local value="$2"
+
+  if ! _win_env_name_valid "$name" || [[ $# -ne 2 ]]; then
+    echo "Usage: win_env_set <name> <value>" >&2
+    return 1
+  fi
+
+  _DOTFILES_WIN_ENV_NAME="$name" _DOTFILES_WIN_ENV_VALUE="$value" _win_powershell '[Environment]::SetEnvironmentVariable($env:_DOTFILES_WIN_ENV_NAME, $env:_DOTFILES_WIN_ENV_VALUE, [EnvironmentVariableTarget]::User)' || return
+}
+
+win_env_rm() {
+  local name="$1"
+
+  if ! _win_env_name_valid "$name" || [[ $# -ne 1 ]]; then
+    echo "Usage: win_env_rm <name>" >&2
+    return 1
+  fi
+
+  _DOTFILES_WIN_ENV_NAME="$name" _win_powershell '[Environment]::SetEnvironmentVariable($env:_DOTFILES_WIN_ENV_NAME, $null, [EnvironmentVariableTarget]::User)' || return
+}
+
+win_env_sync() {
+  local name="$1"
+  local value
+
+  if [[ $# -ne 1 || ! "$name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+    echo "Usage: win_env_sync <bash-variable-name>" >&2
+    return 1
+  fi
+
+  if [[ ! -v "$name" ]]; then
+    echo "Error: Bash environment variable '$name' is not set" >&2
+    return 1
+  fi
+
+  value="${!name}"
+
+  # Convert POSIX path lists (PATH, PYTHONPATH, etc.) before single paths.
+  # Existing Windows paths are already suitable for the Windows environment.
+  if [[ "$value" != [a-zA-Z]:[\\/]* && "$value" != \\* ]]; then
+    if [[ "$name" =~ [Pp][Aa][Tt][Hh]$ && "$value" == *:* ]]; then
+      value="$(cygpath -wp "$value")" || return
+    elif [[ "$value" == "~/"* ]]; then
+      value="$(cygpath -aw "$HOME/${value#\~/}")" || return
+    elif [[ "$value" == /* || "$value" == ./* || "$value" == ../* || -e "$value" ||
+      ( "$value" == */* && "$value" != *://* ) ]]; then
+      value="$(cygpath -aw "$value")" || return
+    fi
+  fi
+
+  win_env_set "$name" "$value"
 }
 
 win_path() {
@@ -249,4 +264,113 @@ win_path_rm() {
       [Environment]::SetEnvironmentVariable("Path", $(if ($newValue) { $newValue } else { $null }), [EnvironmentVariableTarget]::User)
     }
   ' || return
+}
+
+# Finds current-user Windows PATH entries that contain a given executable,
+# excluding the executable's target directory.
+#
+# Arguments:
+#   $1 - Executable name to search for. When it has no extension, PATHEXT
+#        extensions are also checked.
+#   $2 - Target Windows directory to exclude from the search results.
+#
+# Output:
+#   Writes each matching PATH entry, in its original unexpanded form, to
+#   standard output on a separate line. Produces no output when none match.
+_win_path_command_entries() {
+  local command="$1"
+  local target_path="$2"
+
+  _DOTFILES_WIN_COMMAND="$command" _DOTFILES_WIN_TARGET_PATH="$target_path" _win_powershell '
+    foreach ($target in @([EnvironmentVariableTarget]::Machine, [EnvironmentVariableTarget]::User)) {
+      $variables = [Environment]::GetEnvironmentVariables($target)
+      foreach ($key in $variables.Keys) {
+        if ($key -ine "Path") {
+          [Environment]::SetEnvironmentVariable($key, $variables[$key], [EnvironmentVariableTarget]::Process)
+        }
+      }
+    }
+
+    function Expand-PathEntry([string]$value) {
+      for ($i = 0; $i -lt 10; $i++) {
+        $expanded = [Environment]::ExpandEnvironmentVariables($value)
+        if ($expanded -eq $value) { break }
+        $value = $expanded
+      }
+      $value = $value.TrimEnd([char[]]"\\/")
+      if ($value -match "^[a-zA-Z]:$") { $value += "\\" }
+      return $value
+    }
+
+    $command = $env:_DOTFILES_WIN_COMMAND
+    $targetPath = (Expand-PathEntry $env:_DOTFILES_WIN_TARGET_PATH)
+    $extensions = if ([IO.Path]::GetExtension($command)) {
+      @("")
+    } else {
+      @("") + @($env:PATHEXT -split ";" | Where-Object { $_ -ne "" })
+    }
+    $current = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
+    $seen = @{}
+
+    foreach ($item in @($current -split ";" | Where-Object { $_ -ne "" })) {
+      $expandedItem = Expand-PathEntry $item
+      if ($expandedItem -ieq $targetPath -or $seen.ContainsKey($expandedItem)) { continue }
+
+      foreach ($extension in $extensions) {
+        $candidate = Join-Path -Path $expandedItem -ChildPath ($command + $extension)
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+          $seen[$expandedItem] = $true
+          $item
+          break
+        }
+      }
+    }
+  '
+}
+
+win_path_sync() {
+  local command="$1"
+  local executable_path
+  local executable_dir
+  local windows_dir
+  local matches
+  local old_path
+  local reply
+
+  if [[ $# -ne 1 || -z "$command" ]]; then
+    echo "Usage: win_path_sync <bash-command-name>" >&2
+    return 1
+  fi
+
+  executable_path="$(type -P -- "$command" 2>/dev/null)"
+  if [[ -z "$executable_path" ]]; then
+    echo "Error: Executable '$command' was not found in the Bash PATH" >&2
+    return 1
+  fi
+
+  executable_dir="$(cd -P -- "$(dirname -- "$executable_path")" && pwd)" || return
+  windows_dir="$(cygpath -aw "$executable_dir")" || return
+  matches="$(_win_path_command_entries "$(basename -- "$command")" "$windows_dir")" || return
+
+  if [[ -n "$matches" ]]; then
+    while IFS= read -r old_path <&3; do
+      old_path="${old_path%$'\r'}"
+      [[ -z "$old_path" ]] && continue
+
+      if ! read -r -p "Windows PATH entry '$old_path' also contains '$command'. Remove it? [y/N] " reply; then
+        reply=""
+      fi
+      reply="${reply%$'\r'}"
+      case "$reply" in
+        [yY]|[yY][eE][sS])
+          win_path_rm "$old_path" || return
+          ;;
+        *)
+          echo "Kept Windows PATH entry: $old_path"
+          ;;
+      esac
+    done 3<<< "$matches"
+  fi
+
+  win_path_add "$windows_dir"
 }
