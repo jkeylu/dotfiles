@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 
-source "$HOME/.dotfiles/util.sh"
+set -euo pipefail
 
-help() {
-  cat << EOF
-supported commands:
-  install
-EOF
-}
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+source "$SCRIPT_DIR/../util.sh"
 
 install() {
   link_file .gitconfig
@@ -23,13 +19,13 @@ install() {
   elif is_arch; then
     print_run sudo pacman -S git
 
-  elif is_centos; then
-    print_run sudo yum install git
+    elif is_centos; then
+      print_run sudo yum install git
 
-  else
-    log "git is required, please install git first"
-  fi
+    else
+      error "git is required, please install git first"
+      return 1
+    fi
 }
 
 run_cmd "$@"
-

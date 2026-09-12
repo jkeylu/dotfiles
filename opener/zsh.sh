@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
 
-source "$HOME/.dotfiles/util.sh"
+set -euo pipefail
 
-help() {
-  cat << EOF
-supported commands:
-  install
-EOF
-}
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+source "$SCRIPT_DIR/../util.sh"
 
 install() {
   if is_osx; then
     link_file .zshrc_darwin .zshrc
   elif is_win; then
-    log "Not supported"
+    error "zsh is not supported on Windows"
     exit 1
   else
     link_file .zshrc_linux .zshrc
@@ -43,7 +39,7 @@ install() {
     fi
   fi
 
-  if [[ "$SHELL" != "/bin/zsh" ]]; then
+  if [[ "${SHELL:-}" != "/bin/zsh" ]]; then
     echo "Changing default shell to zsh..."
     chsh -s /bin/zsh
   fi

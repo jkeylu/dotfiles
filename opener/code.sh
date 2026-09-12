@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 
-source "$HOME/.dotfiles/util.sh"
+set -euo pipefail
 
-help() {
-  cat << EOF
-supported commands:
-  install
-EOF
-}
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+source "$SCRIPT_DIR/../util.sh"
 
 install() {
   if ! is_osx; then
@@ -24,4 +20,3 @@ install() {
 }
 
 run_cmd "$@"
-

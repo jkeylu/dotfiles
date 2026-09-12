@@ -1,18 +1,14 @@
 #!/usr/bin/env bash
 
-source "$HOME/.dotfiles/util.sh"
+set -euo pipefail
 
-help() {
-  cat << EOF
-supported commands:
-  install
-  uninstall
-EOF
-}
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+source "$SCRIPT_DIR/../util.sh"
 
 install() {
   if ! is_osx; then
-    log "brew can only be installed on macOS"
+    error "brew can only be installed on macOS"
+    return 1
   fi
 
   check_command brew
@@ -27,4 +23,3 @@ uninstall() {
 }
 
 run_cmd "$@"
-

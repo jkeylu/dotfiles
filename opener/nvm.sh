@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-source "$HOME/.dotfiles/util.sh"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+source "$SCRIPT_DIR/../util.sh"
 
-help() {
-  cat << EOF
-supported commands:
-  install
-  update
-EOF
-}
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 
 install() {
   if [[ -d ~/.nvm ]]; then
@@ -27,7 +22,7 @@ install() {
 
 update() {
   if [[ ! -d $NVM_DIR ]]; then
-    log "nvm is not installed, please install first"
+    error "nvm is not installed, please install first"
     exit 1
   fi
 
@@ -39,4 +34,3 @@ update() {
 }
 
 run_cmd "$@"
-

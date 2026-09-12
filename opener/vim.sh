@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 
-source "$HOME/.dotfiles/util.sh"
+set -euo pipefail
 
-help() {
-  cat << EOF
-supported commands:
-  install
-EOF
-}
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+source "$SCRIPT_DIR/../util.sh"
 
 install() {
   if is_link_file ".vim/simple.vim"; then
@@ -20,7 +16,7 @@ install() {
   link_file .vim/lite.vim
 
   if [[ -e ~/.vimrc ]]; then
-    backup ~/.vimrc
+    backup .vimrc
   elif [[ -L ~/.vimrc ]]; then
     rm ~/.vimrc
   fi
@@ -29,4 +25,3 @@ install() {
 }
 
 run_cmd "$@"
-
