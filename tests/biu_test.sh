@@ -79,6 +79,17 @@ run_command() {
   ERROR_OUTPUT="$(<"$STDERR_FILE")"
 }
 
+run_command_with_input() {
+  local input="$1"
+  shift
+
+  set +e
+  OUTPUT="$(printf '%s' "$input" | "$@" 2>"$STDERR_FILE")"
+  STATUS=$?
+  set -e
+  ERROR_OUTPUT="$(<"$STDERR_FILE")"
+}
+
 mkdir -p "$FIXTURE_DIR/opener/windows" "$TEST_HOME" "$FAKE_BIN"
 cp "$REPO_DIR/biu.sh" "$FIXTURE_DIR/biu.sh"
 cp "$REPO_DIR/util.sh" "$FIXTURE_DIR/util.sh"
@@ -122,6 +133,33 @@ for file in "$REPO_DIR/biu.sh" "$REPO_DIR/util.sh" "$REPO_DIR"/opener/*.sh "$REP
     fail "syntax check for $file"
   fi
 done
+
+run_command_with_input $'\n' "$BASH_BIN" -c \
+  'source "$1"; if confirm "Continue?" Y; then printf accepted; fi' _ "$REPO_DIR/util.sh"
+assert_status 0 "confirm accepts the default answer"
+assert_equal accepted "$OUTPUT" "confirm uses the configured default on Enter"
+
+run_command_with_input $'\ny\n' "$BASH_BIN" -c \
+  'source "$1"; if confirm "Continue?"; then printf accepted; fi' _ "$REPO_DIR/util.sh"
+assert_status 0 "confirm requires an answer when no default is configured"
+assert_equal accepted "$OUTPUT" "confirm accepts an answer after Enter without a default"
+assert_contains "$ERROR_OUTPUT" 'please enter Y or N' "confirm rejects Enter without a default"
+
+run_command_with_input $'maybe\ny\n' "$BASH_BIN" -c \
+  'source "$1"; if confirm "Continue?" N; then printf accepted; fi' _ "$REPO_DIR/util.sh"
+assert_status 0 "confirm retries invalid answers"
+assert_equal accepted "$OUTPUT" "confirm accepts Y after an invalid answer"
+assert_contains "$ERROR_OUTPUT" 'please enter Y or N' "confirm explains invalid answers"
+
+run_command_with_input $'n\n' "$BASH_BIN" -c \
+  'source "$1"; if confirm "Continue?" Y; then printf accepted; else printf declined; fi' _ "$REPO_DIR/util.sh"
+assert_status 0 "confirm returns false for N"
+assert_equal declined "$OUTPUT" "confirm reports a negative answer"
+
+run_command_with_input $'n\n' "$BASH_BIN" -c \
+  'source "$1"; confirm "Continue?" Y true; printf continued' _ "$REPO_DIR/util.sh"
+assert_status 1 "confirm can terminate on N"
+assert_equal '' "$OUTPUT" "confirm does not continue after terminating on N"
 
 run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" help
 assert_status 0 "help shows general help"

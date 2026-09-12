@@ -9,19 +9,21 @@ install() {
   local codex_dir="$HOME/.codex"
   local chatgpt_codex_dir="$HOME/.codex.chatgpt"
 
-  log "If the ChatGPT app is running, close it before continuing."
+  confirm "If the ChatGPT app is running, close it before continuing." Y yes
 
-  if [[ -e "$codex_dir" || -L "$codex_dir" ]]; then
-    if [[ -e "$chatgpt_codex_dir" || -L "$chatgpt_codex_dir" ]]; then
-      error "$chatgpt_codex_dir already exists; move or remove it before installing"
-      return 1
-    fi
-
+  if [[ -e "$chatgpt_codex_dir" || -L "$chatgpt_codex_dir" ]]; then
+    log "skipping the move"
+  elif [[ -e "$codex_dir" || -L "$codex_dir" ]]; then
     print_run mv -- "$codex_dir" "$chatgpt_codex_dir"
+    print_run cp -a -- "$chatgpt_codex_dir" "$codex_dir"
   else
     log "$codex_dir does not exist; skipping the move"
   fi
 
+  install_direct
+}
+
+install_direct() {
   if is_win; then
     ensure_command powershell.exe
     powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \

@@ -42,6 +42,67 @@ error() {
   printf 'Error: %s\n' "$*" >&2
 }
 
+confirm() {
+  local message="${1:-}"
+  local default=""
+  local terminate_on_no="${3:-false}"
+  local reply
+  local prompt='[Y/N]'
+
+  if [[ -z "$message" ]]; then
+    error "confirm requires a message"
+    return 2
+  fi
+
+  if (($# >= 2)); then
+    case "$2" in
+      [yY])
+        default=y
+        prompt='[Y/n]'
+        ;;
+      [nN])
+        default=n
+        prompt='[y/N]'
+        ;;
+      '')
+        ;;
+      *)
+        error "confirm default must be Y or N"
+        return 2
+        ;;
+    esac
+  fi
+
+  while true; do
+    if ! IFS= read -r -p "$message $prompt " reply; then
+      reply=n
+    fi
+
+    if [[ -z "$reply" && -n "$default" ]]; then
+      reply="$default"
+    fi
+
+    case "$reply" in
+      [yY])
+        return 0
+        ;;
+      [nN])
+        case "$terminate_on_no" in
+          1|[yY]|[yY][eE][sS]|[tT][rR][uU][eE])
+            exit 1
+            ;;
+          *)
+            return 1
+            ;;
+        esac
+        ;;
+      *)
+        error 'please enter Y or N'
+        ;;
+    esac
+  done
+}
+
 print_run() {
   log "$@"
   "$@"
