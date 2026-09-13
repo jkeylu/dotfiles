@@ -23,9 +23,11 @@ The main commands are:
 dotfilebiu install <name>
 dotfilebiu uninstall <name>
 dotfilebiu run <name> <action> [args...]
+dotfilebiu <name> <action> [args...]
 ```
 
-`install` and `uninstall` accept exactly one component. Use `list` to see
+`<name> <action>` is a shortcut for `run <name> <action>`. `install` and
+`uninstall` accept exactly one component. Use `list` to see
 available components and `help <name>` to see the actions supported by one
 component.
 
@@ -81,6 +83,7 @@ dotfilebiu install iterm2
 ```sh
 dotfilebiu install nvm
 dotfilebiu run nvm update
+dotfilebiu nvm update
 ```
 
 ### miniforge

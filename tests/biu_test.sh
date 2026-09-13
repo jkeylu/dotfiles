@@ -185,6 +185,14 @@ run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_D
 assert_status 0 "run dispatches run"
 assert_equal '<value>' "$OUTPUT" "run output"
 
+run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" mock echo_args value
+assert_status 0 "component shortcut dispatches run"
+assert_equal '<value>' "$OUTPUT" "component shortcut output"
+
+run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" mock
+assert_status 0 "component shortcut defaults to help"
+assert_contains "$OUTPUT" 'supported actions:' "component shortcut help output"
+
 for removed_alias in h -h --help l -l --list i -i --install u -u --uninstall x -x --run; do
   run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" "$removed_alias"
   assert_status 2 "$removed_alias alias is removed"
@@ -239,6 +247,10 @@ run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_D
 assert_status 0 "run preserves complex arguments"
 assert_equal $'<two words>\n<*.txt>\n<semi;colon>\n<$HOME>' "$OUTPUT" "run argument boundaries"
 
+run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" mock echo_args 'two words' '*.txt' 'semi;colon' '$HOME'
+assert_status 0 "component shortcut preserves complex arguments"
+assert_equal $'<two words>\n<*.txt>\n<semi;colon>\n<$HOME>' "$OUTPUT" "component shortcut argument boundaries"
+
 DANGER_MARKER="$TEST_ROOT/danger-called"
 cat > "$FAKE_BIN/danger" <<EOF
 #!/usr/bin/env bash
@@ -250,11 +262,19 @@ assert_status 2 "unsupported action is rejected"
 assert_contains "$ERROR_OUTPUT" 'supported actions:' "unsupported action lists allowed actions"
 assert_not_exists "$DANGER_MARKER" "unsupported action does not execute PATH command"
 
+run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" mock danger
+assert_status 2 "component shortcut rejects unsupported action"
+assert_contains "$ERROR_OUTPUT" 'supported actions:' "component shortcut lists allowed actions"
+assert_not_exists "$DANGER_MARKER" "component shortcut does not execute PATH command"
+
 run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" run mock _private_helper
 assert_status 2 "private helper action is rejected"
 
 run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" run mock fail_with 23
 assert_status 23 "opener failure status is propagated"
+
+run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" mock fail_with 24
+assert_status 24 "component shortcut propagates opener failure status"
 
 assert_not_exists "$TEST_HOME/.config" "fixture help does not create .config"
 assert_not_exists "$TEST_HOME/.bin" "fixture help does not create .bin"

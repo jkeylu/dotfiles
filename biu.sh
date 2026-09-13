@@ -16,6 +16,7 @@ commands:
   install <name>                 install one component
   uninstall <name>               uninstall one component
   run <name> <action> [args...]  run a supported component action
+  <name> <action> [args...]      shortcut for the run command
 
 examples:
   $PROGRAM_NAME list
@@ -23,6 +24,7 @@ examples:
   $PROGRAM_NAME install zsh
   $PROGRAM_NAME uninstall brew
   $PROGRAM_NAME run nvm update
+  $PROGRAM_NAME nvm update
 EOF
 }
 
@@ -41,8 +43,7 @@ validate_component() {
 
 run_opener() {
   local component="$1"
-  local action="$2"
-  shift 2
+  shift
 
   validate_component "$component"
 
@@ -52,7 +53,7 @@ run_opener() {
     return 2
   fi
 
-  bash "$script" "$action" "$@"
+  bash "$script" "$@"
 }
 
 list_openers() {
@@ -120,9 +121,13 @@ main() {
       run_opener "$component" "$action" "$@"
       ;;
     *)
-      error "unknown command '$command_name'"
-      show_usage >&2
-      return 2
+      if [[ "$command_name" =~ ^[a-z0-9][a-z0-9_-]*$ && -f "$OPENER_DIR/$command_name.sh" ]]; then
+        run_opener "$command_name" "$@"
+      else
+        error "unknown command '$command_name'"
+        show_usage >&2
+        return 2
+      fi
       ;;
   esac
 }
