@@ -164,6 +164,12 @@ assert_equal '' "$OUTPUT" "confirm does not continue after terminating on N"
 run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" help
 assert_status 0 "help shows general help"
 assert_contains "$OUTPUT" 'usage:' "general help output"
+assert_contains "$OUTPUT" 'update' "general help lists update"
+if [[ "$OUTPUT" == *'uninstall <name>'* ]]; then
+  fail "general help lists the removed uninstall command"
+else
+  pass
+fi
 
 run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh"
 assert_status 0 "no arguments shows help"
@@ -177,9 +183,19 @@ run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_D
 assert_status 0 "install dispatches install"
 assert_equal 'mock install' "$OUTPUT" "install output"
 
-run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" uninstall mock
-assert_status 0 "uninstall dispatches uninstall"
-assert_equal 'mock uninstall' "$OUTPUT" "uninstall output"
+GIT_TRACE="$TEST_ROOT/git-trace"
+cat > "$FAKE_BIN/git" <<'EOF'
+#!/usr/bin/env bash
+printf '<%s>\n' "$@" > "$GIT_TRACE"
+printf 'Already up to date.\n'
+EOF
+chmod +x "$FAKE_BIN/git"
+export GIT_TRACE
+
+run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" update
+assert_status 0 "update pulls the dotfiles repository"
+assert_equal 'Already up to date.' "$OUTPUT" "update preserves git output"
+assert_equal $'<-C>\n'"<$FIXTURE_DIR>"$'\n<pull>' "$(<"$GIT_TRACE")" "update runs git pull in the script repository"
 
 run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" run mock echo_args value
 assert_status 0 "run dispatches run"
@@ -217,8 +233,12 @@ assert_status 2 "install requires a component"
 run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" install mock extra
 assert_status 2 "install rejects extra arguments"
 
-run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" uninstall
-assert_status 2 "uninstall requires a component"
+run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" update extra
+assert_status 2 "update rejects arguments"
+
+run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" uninstall mock
+assert_status 2 "uninstall command is removed"
+assert_contains "$ERROR_OUTPUT" 'unknown command' "uninstall removal error"
 
 run_command env HOME="$TEST_HOME" PATH="$FAKE_BIN:$PATH" "$BASH_BIN" "$FIXTURE_DIR/biu.sh" run mock
 assert_status 2 "run requires an action"

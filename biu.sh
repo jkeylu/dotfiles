@@ -14,7 +14,7 @@ commands:
   help [name]                    show general or component help
   list                           list available components
   install <name>                 install one component
-  uninstall <name>               uninstall one component
+  update                         update the dotfiles repository
   run <name> <action> [args...]  run a supported component action
   <name> <action> [args...]      shortcut for the run command
 
@@ -22,7 +22,7 @@ examples:
   $PROGRAM_NAME list
   $PROGRAM_NAME help nvm
   $PROGRAM_NAME install zsh
-  $PROGRAM_NAME uninstall brew
+  $PROGRAM_NAME update
   $PROGRAM_NAME run nvm update
   $PROGRAM_NAME nvm update
 EOF
@@ -106,9 +106,9 @@ main() {
       expect_exact_args 1 "$#" 'install <name>'
       run_opener "$1" install
       ;;
-    uninstall)
-      expect_exact_args 1 "$#" 'uninstall <name>'
-      run_opener "$1" uninstall
+    update)
+      expect_exact_args 0 "$#" update
+      git -C "$DOTFILES_DIR" pull
       ;;
     run)
       if (($# < 2)); then

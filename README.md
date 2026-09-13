@@ -21,15 +21,15 @@ The main commands are:
 
 ```text
 dotfilebiu install <name>
-dotfilebiu uninstall <name>
+dotfilebiu update
 dotfilebiu run <name> <action> [args...]
 dotfilebiu <name> <action> [args...]
 ```
 
-`<name> <action>` is a shortcut for `run <name> <action>`. `install` and
-`uninstall` accept exactly one component. Use `list` to see
-available components and `help <name>` to see the actions supported by one
-component.
+`update` runs `git pull` in the dotfiles repository. `<name> <action>` is a
+shortcut for `run <name> <action>`. `install` accepts exactly one component.
+Use `list` to see available components and `help <name>` to see the actions
+supported by one component.
 
 Component actions are discovered automatically from functions declared in each
 `opener/*.sh` after `util.sh` is loaded. Helper functions must start with `_`
@@ -45,7 +45,6 @@ dotfilebiu install bash
 
 ```sh
 dotfilebiu install brew
-dotfilebiu uninstall brew
 ```
 
 ### code
