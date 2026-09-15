@@ -130,3 +130,29 @@ if [[ -d "$HOME/.local/miniforge3" ]]; then
     mamba "$@"
   }
 fi
+
+git_merged() {
+  local branch="${1:-HEAD}"
+  local target_ref
+  local merged_branch
+  local merged_branches
+
+  if [[ $# -gt 1 ]]; then
+    echo "Usage: git_merged [branch]" >&2
+    return 1
+  fi
+
+  if ! git rev-parse --verify --quiet "${branch}^{commit}" > /dev/null; then
+    echo "Error: branch '$branch' does not exist" >&2
+    return 1
+  fi
+
+  target_ref="$(git rev-parse --symbolic-full-name "$branch")" || return
+  merged_branches="$(git for-each-ref --merged="$branch" --format='%(refname)' refs/heads/)" || return
+  while IFS= read -r merged_branch; do
+    [[ -z "$merged_branch" || "$merged_branch" == "$target_ref" ]] && continue
+    printf '%s\n' "${merged_branch#refs/heads/}"
+  done <<< "$merged_branches"
+
+  return 0
+}
