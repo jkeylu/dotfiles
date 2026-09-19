@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+
+prompt='Select'
+multi=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --multi)
+      multi=1
+      shift
+      ;;
+    --prompt)
+      if [[ $# -lt 2 ]]; then
+        printf 'Usage: picker [--multi] [--prompt TEXT]\n' >&2
+        exit 2
+      fi
+      prompt=$2
+      shift 2
+      ;;
+    --prompt=*)
+      prompt=${1#--prompt=}
+      shift
+      ;;
+    -h|--help)
+      printf 'Usage: picker [--multi] [--prompt TEXT]\n'
+      exit 0
+      ;;
+    *)
+      printf 'Usage: picker [--multi] [--prompt TEXT]\n' >&2
+      exit 2
+      ;;
+  esac
+done
+
+items=()
+while IFS= read -r item || [[ -n "$item" ]]; do
+  [[ -n "$item" ]] && items+=("$item")
+done
+[[ "${#items[@]}" -gt 0 ]] || exit 1
+
+case "${DOTFILES_PICKER_BUILTIN:-auto}" in
+  1|true|on) backend=builtin ;;
+  0|false|off) backend=fzf ;;
+  auto) if command -v fzf >/dev/null 2>&1; then backend=fzf; else backend=builtin; fi ;;
+  *) printf 'Error: DOTFILES_PICKER_BUILTIN must be 1, 0, or unset.\n' >&2; exit 2 ;;
+esac
+
+if [[ "$backend" == fzf ]]; then
+  if ! command -v fzf >/dev/null 2>&1; then
+    printf 'Error: fzf is required when DOTFILES_PICKER_BUILTIN=0.\n' >&2
+    exit 2
+  fi
+  fzf_args=(--no-sort --prompt="$prompt> ")
+  if [[ "$multi" -eq 1 ]]; then
+    fzf_args+=(--multi --bind 'space:toggle' \
+      --header='Arrows: move  Space: toggle  Enter: confirm  Esc: cancel')
+  else
+    fzf_args+=(--no-multi --header='Arrows: move  Enter: choose  Esc: cancel')
+  fi
+  printf '%s\n' "${items[@]}" | fzf "${fzf_args[@]}"
+  exit $?
+fi
+
+if ! { exec 3<>/dev/tty; } 2>/dev/null; then
+  printf 'Error: built-in selection requires a terminal.\n' >&2
+  exit 2
+fi
+saved_tty="$(stty -g <&3)" || exit 2
+if ! stty -echo -icanon min 1 time 0 <&3; then
+  printf 'Error: unable to configure the terminal.\n' >&2
+  exit 2
+fi
+
+restore_terminal() {
+  stty "$saved_tty" <&3
+  printf '\033[?25h\033[?1049l' >&3
+  exec 3>&-
+}
+trap restore_terminal EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+printf '\033[?1049h\033[?25l' >&3
+
+selected=()
+if [[ "$multi" -eq 1 ]]; then
+  for item in "${items[@]}"; do selected+=(0); done
+fi
+cursor=0
+offset=0
+
+draw_menu() {
+  local height width visible last index label limit mark count=0
+  read -r height width < <(stty size <&3)
+  [[ "$height" =~ ^[0-9]+$ ]] || height=24
+  [[ "$width" =~ ^[0-9]+$ ]] || width=80
+  visible=$((height - 4))
+  ((visible > 0)) || visible=1
+  if ((cursor < offset)); then
+    offset=$cursor
+  elif ((cursor >= offset + visible)); then
+    offset=$((cursor - visible + 1))
+  fi
+  last=$((offset + visible))
+  ((last < ${#items[@]})) || last=${#items[@]}
+  limit=$((width - 8))
+  ((limit > 0)) || limit=1
+
+  printf '\033[H\033[2J%s\r\n' "$prompt" >&3
+  if [[ "$multi" -eq 1 ]]; then
+    printf 'Arrows: move  Space: toggle  Enter: confirm  Esc: cancel\r\n' >&3
+  else
+    printf 'Arrows: move  Enter: choose  Esc: cancel\r\n' >&3
+  fi
+  for ((index = offset; index < last; index++)); do
+    printf -v label '%q' "${items[$index]}"
+    label="${label:0:limit}"
+    if [[ "$multi" -eq 1 ]]; then
+      mark=' '
+      if [[ "${selected[$index]}" -eq 1 ]]; then mark=x; fi
+      if ((index == cursor)); then
+        printf '\033[7m> [%s] %s\033[0m\r\n' "$mark" "$label" >&3
+      else
+        printf '  [%s] %s\r\n' "$mark" "$label" >&3
+      fi
+    else
+      if ((index == cursor)); then
+        printf '\033[7m> %s\033[0m\r\n' "$label" >&3
+      else
+        printf '  %s\r\n' "$label" >&3
+      fi
+    fi
+  done
+  if [[ "$multi" -eq 1 ]]; then
+    for mark in "${selected[@]}"; do ((count += mark)); done
+    printf '\r\n%d selected  (%d-%d of %d)\r\n' \
+      "$count" "$((offset + 1))" "$last" "${#items[@]}" >&3
+  else
+    printf '\r\n%d of %d\r\n' "$((cursor + 1))" "${#items[@]}" >&3
+  fi
+}
+
+while :; do
+  draw_menu
+  if ! IFS= read -r -s -n1 -u 3 key; then exit 130; fi
+  case "$key" in
+    ' ')
+      if [[ "$multi" -eq 1 ]]; then
+        if [[ "${selected[$cursor]}" -eq 1 ]]; then
+          selected[$cursor]=0
+        else
+          selected[$cursor]=1
+        fi
+      fi
+      ;;
+    ''|$'\r'|$'\n')
+      trap - EXIT INT TERM
+      restore_terminal
+      if [[ "$multi" -eq 1 ]]; then
+        for index in "${!items[@]}"; do
+          if [[ "${selected[$index]}" -eq 1 ]]; then
+            printf '%s\n' "${items[$index]}"
+          fi
+        done
+      else
+        printf '%s\n' "${items[$cursor]}"
+      fi
+      exit 0
+      ;;
+    $'\033')
+      if ! IFS= read -r -s -n1 -t 0.1 -u 3 next; then exit 130; fi
+      if [[ "$next" != '[' && "$next" != O ]]; then exit 130; fi
+      if ! IFS= read -r -s -n1 -t 0.1 -u 3 next; then exit 130; fi
+      case "$next" in
+        A) cursor=$(((cursor + ${#items[@]} - 1) % ${#items[@]})) ;;
+        B) cursor=$(((cursor + 1) % ${#items[@]})) ;;
+      esac
+      ;;
+  esac
+done

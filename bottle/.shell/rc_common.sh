@@ -1,6 +1,6 @@
 # User configuration
 
-export PATH="$DOTFILES_HOME/scripts/git:$PATH"
+export PATH="$DOTFILES_HOME/scripts/tools:$DOTFILES_HOME/scripts/git:$PATH"
 if [[ ":$PATH:" != *":$HOME/.bin:"* ]]; then
   export PATH=$HOME/.bin:$PATH
 fi

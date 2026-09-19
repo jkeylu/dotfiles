@@ -59,6 +59,22 @@ dotfilebiu install code
 dotfilebiu install fzf
 ```
 
+### picker
+
+`picker` reads one nonempty choice per line from standard input and prints the
+choice to standard output. Use the arrow keys to move, Enter to choose, and Esc
+to cancel. Add `--multi` to select several choices with Space and confirm with
+Enter:
+
+```sh
+printf 'one\ntwo\nthree\n' | picker --prompt 'Choose one'
+printf 'one\ntwo\nthree\n' | picker --multi --prompt 'Choose several'
+```
+
+It uses `fzf` when available and otherwise shows a built-in terminal menu.
+Set `DOTFILES_PICKER_BUILTIN=1` to use the built-in menu, or `0` to require
+`fzf` and disable the fallback. Leave it unset for automatic selection.
+
 ### git
 
 ```sh
@@ -67,8 +83,8 @@ dotfilebiu install git
 
 `git merged [branch]` lists local branches merged into `branch` (defaults to
 `HEAD`), excluding the target branch. Use `git merged --clean [branch]` to
-select one or more branches with `fzf`, review their local and remote names,
-and confirm deletion. The remote branch comes from the local branch's upstream;
+select one or more branches with `picker --multi`, review their local and remote
+names, and confirm deletion. The remote branch comes from the local branch's upstream;
 without an upstream, the command checks `origin` or the only configured remote
 for a branch with the same name. Cleanup stops if a remote branch has a
 different tip from its local branch.

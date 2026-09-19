@@ -32,11 +32,12 @@ mkdir "$TEST_ROOT/bin"
 cat > "$TEST_ROOT/bin/fzf" <<'EOF'
 #!/usr/bin/env bash
 cat >/dev/null
+[[ " $* " == *' --multi '* ]] || exit 97
 [[ "${TEST_FZF_STATUS:-0}" -eq 0 ]] || exit "$TEST_FZF_STATUS"
 printf '%s\n' "$TEST_SELECTION"
 EOF
 chmod +x "$TEST_ROOT/bin/fzf"
-export PATH="$REPO_DIR/scripts/git:$TEST_ROOT/bin:$PATH"
+export PATH="$REPO_DIR/scripts/tools:$REPO_DIR/scripts/git:$TEST_ROOT/bin:$PATH"
 
 cd "$TEST_ROOT/work"
 

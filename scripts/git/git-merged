@@ -41,18 +41,13 @@ if [[ "${#branches[@]}" -eq 0 ]]; then
   printf 'No merged branches found.\n' >&2
   exit 0
 fi
-if ! command -v fzf >/dev/null 2>&1; then
-  printf 'Error: fzf is required for --clean.\n' >&2
-  exit 1
-fi
-
-selection="$(printf '%s\n' "${branches[@]}" | fzf --multi --prompt='Merged branches> ' --header='Tab: select multiple, Enter: continue')"
+selection="$(printf '%s\n' "${branches[@]}" | picker --multi --prompt 'Merged branches')"
 select_status=$?
 if [[ "$select_status" -eq 1 || "$select_status" -eq 130 ]]; then
   exit 0
 fi
 if [[ "$select_status" -ne 0 ]]; then
-  printf 'Error: fzf failed.\n' >&2
+  printf 'Error: picker failed.\n' >&2
   exit "$select_status"
 fi
 [[ -n "$selection" ]] || exit 0
