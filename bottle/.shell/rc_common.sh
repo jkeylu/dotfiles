@@ -29,6 +29,9 @@ fi
 set -o ignoreeof
 
 if [[ "$SHELL" == *"/bin/bash" && $- == *i* ]]; then
+  bind '"\t": menu-complete'            # 下一个候选
+  bind '"\e[Z": menu-complete-backward' # 上一个候选
+
   # Use Up/Down arrow keys to search command history matching the current input
   bind '"\e[A": history-search-backward'
   bind '"\e[B": history-search-forward'
