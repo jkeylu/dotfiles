@@ -75,6 +75,26 @@ It uses `fzf` when available and otherwise shows a built-in terminal menu.
 Set `DOTFILES_PICKER_BUILTIN=1` to use the built-in menu, or `0` to require
 `fzf` and disable the fallback. Leave it unset for automatic selection.
 
+### jdev
+
+`scripts/tools/jdev` watches a Spring Boot Maven or Gradle application, builds
+an executable JAR, and restarts it when source, resources, or build files change.
+Add `scripts/tools` to `PATH`, then run `jdev` from the application directory
+without a configuration file, or create an optional template:
+
+```sh
+jdev
+jdev init
+jdev init --global
+jdev --build-tool gradle --java-version 21
+```
+
+Configuration is read from `$HOME/.jdev.conf`, then the project `.jdev.conf`;
+command line options take precedence. For a declared Java version, `jdev`
+searches the JDK installations directly under `JDK_HOME`, then checks
+`JAVA_HOME` and `PATH`. Gradle projects use `gradlew` when present, followed by
+`GRADLE_HOME` and `PATH`. Use `jdev --help` for all options.
+
 ### git
 
 ```sh

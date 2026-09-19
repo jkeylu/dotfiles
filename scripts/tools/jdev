@@ -1,0 +1,1312 @@
+#!/usr/bin/env bash
+
+# jdev 在 Git Bash 中构建并运行 Spring Boot Maven/Gradle 项目，监听修改后重启。
+# 配置文件只在启动时读取；构建失败时保留正在运行的服务。
+
+# ------------------------- 可编辑配置 -------------------------
+PROJECT_DIR_OVERRIDE=""               # 项目目录
+BUILD_TOOL_OVERRIDE=""                # maven、gradle 或 auto
+JAVA_HOME_OVERRIDE=""                 # Java 安装目录
+JAVA_VERSION_OVERRIDE=""              # Java 主版本
+MAVEN_HOME_OVERRIDE=""                # Maven 安装目录
+GRADLE_HOME_OVERRIDE=""               # Gradle 安装目录
+SPRING_PROFILE_OVERRIDE=""            # Spring Boot 环境
+RESTART_DELAY_SECONDS_OVERRIDE=""      # 重启防抖秒数
+POLL_INTERVAL_SECONDS_OVERRIDE=""      # 文件扫描间隔秒数
+STOP_TIMEOUT_SECONDS_OVERRIDE=""       # 服务停止超时秒数
+RESTART_MODE_OVERRIDE=""               # 重启方式：auto 或 ask
+JAR_FILE_OVERRIDE=""                  # 可执行 JAR 路径
+ENV_FILE_OVERRIDE=""                  # 应用环境变量文件
+
+# 数组中的每一项都是一个独立参数；留空时读取配置文件或默认值。
+MAVEN_BUILD_ARGS_OVERRIDE=()
+GRADLE_BUILD_ARGS_OVERRIDE=()
+JAVA_OPTS_OVERRIDE=()
+APPLICATION_ARGS_OVERRIDE=()
+WATCH_EXTRA_PATHS_OVERRIDE=()
+# --------------------------------------------------------------
+
+set -uo pipefail
+
+SCRIPT_NAME="$(basename "$0")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+INVOKE_DIR="$(pwd -P)"
+CONFIG_NAME=".jdev.conf"
+COMMAND="run"
+
+CLI_PROJECT_DIR=""
+CLI_BUILD_TOOL=""
+CLI_JAVA_HOME=""
+CLI_JAVA_VERSION=""
+CLI_MAVEN_HOME=""
+CLI_GRADLE_HOME=""
+CLI_SPRING_PROFILE=""
+CLI_RESTART_DELAY=""
+CLI_POLL_INTERVAL=""
+CLI_STOP_TIMEOUT=""
+CLI_RESTART_MODE=""
+CLI_JAR_FILE=""
+CLI_ENV_FILE=""
+SKIP_INITIAL_BUILD=0
+FORCE_INIT=0
+GLOBAL_INIT=0
+CLI_MAVEN_ARGS=()
+CLI_GRADLE_ARGS=()
+CLI_JAVA_OPTS=()
+CLI_APPLICATION_ARGS=()
+CLI_WATCH_PATHS=()
+
+usage() {
+  cat <<EOF
+用法：
+  ${SCRIPT_NAME} [选项] [-- 应用参数]
+  ${SCRIPT_NAME} init [--project-dir <目录> | --global] [--force]
+
+命令：
+  init                       生成配置模板
+
+选项：
+  --project-dir <目录>       Spring Boot 项目目录
+  --build-tool <工具>        maven 或 gradle；默认自动判断
+  --java-home <目录>         指定 JDK 目录
+  --java-version <版本>      指定 Java 主版本，如 8、17、21
+  --maven-home <目录>        指定 Maven 安装目录
+  --gradle-home <目录>       指定 Gradle 安装目录
+  --profile <名称>           Spring Boot 环境，默认 dev
+  --delay <秒>               修改稳定后的等待时间，默认 3
+  --poll <秒>                文件扫描间隔，默认 1
+  --stop-timeout <秒>        服务停止超时，默认 10
+  --restart-mode <方式>      auto 自动重启，ask 重启前询问
+  --jar <路径>               指定可执行 JAR
+  --env-file <路径>          应用环境变量文件，默认 .env
+  --skip-initial-build       使用已有 JAR 启动
+  --maven-arg <参数>         设置 Maven 构建参数，可重复
+  --gradle-arg <参数>        设置 Gradle 构建参数，可重复
+  --java-opt <参数>          设置 JVM 参数，可重复
+  --app-arg <参数>           设置应用参数，可重复
+  --watch <路径>             设置额外监听路径，可重复
+  --global                   init 时在 HOME 目录生成配置
+  --force                    init 时覆盖已有配置
+  -h, --help                 显示帮助
+
+配置查找：
+  从 HOME 读取全局配置，从项目读取项目配置；当前目录向上查找项目。
+  如果当前目录不在项目中，最后尝试脚本所在目录。
+
+配置优先级：
+  命令行 > 项目配置 > HOME 配置 > 脚本头部覆盖值 > 环境变量 > 默认值
+
+环境变量：
+  JAVA_HOME、JDK_HOME、MAVEN_HOME、GRADLE_HOME、SPRING_BOOT_PROJECT_DIR
+  SPRING_PROFILES_ACTIVE、SPRING_BOOT_BUILD_TOOL
+  SPRING_BOOT_RESTART_DELAY_SECONDS、SPRING_BOOT_POLL_INTERVAL_SECONDS
+  SPRING_BOOT_STOP_TIMEOUT_SECONDS、SPRING_BOOT_RESTART_MODE、SPRING_BOOT_JAR_FILE
+  SPRING_BOOT_ENV_FILE
+
+默认监听：
+  Java/Kotlin/Groovy 源码、资源、所选构建工具的配置和应用环境变量文件
+
+示例：
+  ${SCRIPT_NAME} init
+  ${SCRIPT_NAME} init --global
+  ${SCRIPT_NAME}
+  ${SCRIPT_NAME} --delay 5 --profile dev
+  ${SCRIPT_NAME} --restart-mode ask
+  ${SCRIPT_NAME} --env-file .env.dev
+  ${SCRIPT_NAME} --project-dir D:/code/order-service
+  ${SCRIPT_NAME} --java-opt=-Xmx2g -- --server.port=8081
+EOF
+}
+
+die() {
+  printf '[jdev] 错误：%s\n' "$*" >&2
+  exit 1
+}
+
+log() {
+  printf '[jdev] %s %s\n' "$(date '+%H:%M:%S')" "$*"
+}
+
+need_value() {
+  [[ $# -ge 2 && -n "$2" ]] || die "选项 $1 缺少参数。"
+}
+
+first_non_empty() {
+  local value
+  for value in "$@"; do
+    if [[ -n "$value" ]]; then
+      printf '%s' "$value"
+      return 0
+    fi
+  done
+  return 1
+}
+
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+to_bash_path() {
+  local path_value="$1"
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -u "$path_value" 2>/dev/null || printf '%s' "$path_value"
+  else
+    printf '%s' "$path_value"
+  fi
+}
+
+absolute_from_base() {
+  local path_value
+  local base_dir="$2"
+  path_value="$(to_bash_path "$1")"
+  if [[ "$path_value" == /* ]]; then
+    printf '%s' "$path_value"
+  else
+    printf '%s/%s' "${base_dir%/}" "$path_value"
+  fi
+}
+
+find_upward() {
+  local start_dir
+  local file_name="$2"
+  local parent_dir
+
+  start_dir="$(absolute_from_base "$1" "$INVOKE_DIR")"
+  [[ -d "$start_dir" ]] || return 1
+  start_dir="$(cd "$start_dir" && pwd -P)" || return 1
+
+  while true; do
+    if [[ -f "${start_dir}/${file_name}" ]]; then
+      printf '%s/%s' "$start_dir" "$file_name"
+      return 0
+    fi
+    parent_dir="$(dirname "$start_dir")"
+    [[ "$parent_dir" != "$start_dir" ]] || break
+    start_dir="$parent_dir"
+  done
+  return 1
+}
+
+find_project_upward() {
+  local current parent
+  current="$(absolute_from_base "$1" "$INVOKE_DIR")"
+  [[ -d "$current" ]] || return 1
+  current="$(cd "$current" && pwd -P)" || return 1
+  while true; do
+    if has_maven_project "$current" || has_gradle_project "$current"; then
+      printf '%s' "$current"
+      return 0
+    fi
+    parent="$(dirname "$current")"
+    [[ "$parent" != "$current" ]] || break
+    current="$parent"
+  done
+  return 1
+}
+
+has_maven_project() { [[ -f "$1/pom.xml" ]]; }
+has_gradle_project() { [[ -f "$1/build.gradle" || -f "$1/build.gradle.kts" ]]; }
+
+if [[ "${1-}" == "init" ]]; then
+  COMMAND="init"
+  shift
+fi
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --project-dir)
+      need_value "$1" "${2-}"
+      CLI_PROJECT_DIR="$2"
+      shift 2
+      ;;
+    --project-dir=*) CLI_PROJECT_DIR="${1#*=}"; shift ;;
+    --build-tool)
+      need_value "$1" "${2-}"
+      CLI_BUILD_TOOL="$2"
+      shift 2
+      ;;
+    --build-tool=*) CLI_BUILD_TOOL="${1#*=}"; shift ;;
+    --java-home)
+      need_value "$1" "${2-}"
+      CLI_JAVA_HOME="$2"
+      shift 2
+      ;;
+    --java-home=*) CLI_JAVA_HOME="${1#*=}"; shift ;;
+    --java-version)
+      need_value "$1" "${2-}"
+      CLI_JAVA_VERSION="$2"
+      shift 2
+      ;;
+    --java-version=*) CLI_JAVA_VERSION="${1#*=}"; shift ;;
+    --maven-home)
+      need_value "$1" "${2-}"
+      CLI_MAVEN_HOME="$2"
+      shift 2
+      ;;
+    --maven-home=*) CLI_MAVEN_HOME="${1#*=}"; shift ;;
+    --gradle-home)
+      need_value "$1" "${2-}"
+      CLI_GRADLE_HOME="$2"
+      shift 2
+      ;;
+    --gradle-home=*) CLI_GRADLE_HOME="${1#*=}"; shift ;;
+    --profile)
+      need_value "$1" "${2-}"
+      CLI_SPRING_PROFILE="$2"
+      shift 2
+      ;;
+    --profile=*) CLI_SPRING_PROFILE="${1#*=}"; shift ;;
+    --delay)
+      need_value "$1" "${2-}"
+      CLI_RESTART_DELAY="$2"
+      shift 2
+      ;;
+    --delay=*) CLI_RESTART_DELAY="${1#*=}"; shift ;;
+    --poll)
+      need_value "$1" "${2-}"
+      CLI_POLL_INTERVAL="$2"
+      shift 2
+      ;;
+    --poll=*) CLI_POLL_INTERVAL="${1#*=}"; shift ;;
+    --stop-timeout)
+      need_value "$1" "${2-}"
+      CLI_STOP_TIMEOUT="$2"
+      shift 2
+      ;;
+    --stop-timeout=*) CLI_STOP_TIMEOUT="${1#*=}"; shift ;;
+    --restart-mode)
+      need_value "$1" "${2-}"
+      CLI_RESTART_MODE="$2"
+      shift 2
+      ;;
+    --restart-mode=*) CLI_RESTART_MODE="${1#*=}"; shift ;;
+    --jar)
+      need_value "$1" "${2-}"
+      CLI_JAR_FILE="$2"
+      shift 2
+      ;;
+    --jar=*) CLI_JAR_FILE="${1#*=}"; shift ;;
+    --env-file)
+      need_value "$1" "${2-}"
+      CLI_ENV_FILE="$2"
+      shift 2
+      ;;
+    --env-file=*) CLI_ENV_FILE="${1#*=}"; shift ;;
+    --maven-arg)
+      need_value "$1" "${2-}"
+      CLI_MAVEN_ARGS+=("$2")
+      shift 2
+      ;;
+    --maven-arg=*) CLI_MAVEN_ARGS+=("${1#*=}"); shift ;;
+    --gradle-arg)
+      need_value "$1" "${2-}"
+      CLI_GRADLE_ARGS+=("$2")
+      shift 2
+      ;;
+    --gradle-arg=*) CLI_GRADLE_ARGS+=("${1#*=}"); shift ;;
+    --java-opt)
+      need_value "$1" "${2-}"
+      CLI_JAVA_OPTS+=("$2")
+      shift 2
+      ;;
+    --java-opt=*) CLI_JAVA_OPTS+=("${1#*=}"); shift ;;
+    --app-arg)
+      need_value "$1" "${2-}"
+      CLI_APPLICATION_ARGS+=("$2")
+      shift 2
+      ;;
+    --app-arg=*) CLI_APPLICATION_ARGS+=("${1#*=}"); shift ;;
+    --watch)
+      need_value "$1" "${2-}"
+      CLI_WATCH_PATHS+=("$2")
+      shift 2
+      ;;
+    --watch=*) CLI_WATCH_PATHS+=("${1#*=}"); shift ;;
+    --skip-initial-build) SKIP_INITIAL_BUILD=1; shift ;;
+    --force) FORCE_INIT=1; shift ;;
+    --global) GLOBAL_INIT=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    --)
+      shift
+      CLI_APPLICATION_ARGS+=("$@")
+      break
+      ;;
+    *) die "未知选项：$1，可使用 --help 查看帮助。" ;;
+  esac
+done
+
+for required_command in awk cat cp dirname env find grep mv printenv sha256sum sort stat; do
+  command -v "$required_command" >/dev/null 2>&1 || die "缺少命令：$required_command"
+done
+
+generate_config() {
+  local config_file="$1"
+  local temp_file="${config_file}.tmp.${BASHPID}"
+  if [[ -e "$config_file" && "$FORCE_INIT" -ne 1 ]]; then
+    die "配置文件已存在：$config_file；如需覆盖请添加 --force。"
+  fi
+  if ! cat >"$temp_file" <<'EOF'
+# 所有设置均为可选项；取消注释后生效。相对路径以本配置文件所在目录为准。
+# project_dir=.
+# build_tool=maven
+# java_home=/path/to/jdk
+# java_version=17
+# maven_home=/path/to/maven
+# gradle_home=/path/to/gradle
+# spring_profile=dev
+# restart_delay_seconds=3
+# poll_interval_seconds=1
+# stop_timeout_seconds=10
+# restart_mode=auto
+# jar_file=target/application.jar
+# env_file=.env
+# maven_arg=-DskipTests
+# maven_arg=package
+# gradle_arg=build
+# gradle_arg=-x
+# gradle_arg=test
+# java_opt=-Xmx2g
+# app_arg=--server.port=8081
+# watch=src/main/kotlin
+EOF
+  then
+    rm -f -- "$temp_file" 2>/dev/null || true
+    die "无法写入临时配置：$temp_file"
+  fi
+  if ! mv -f -- "$temp_file" "$config_file"; then
+    rm -f -- "$temp_file" 2>/dev/null || true
+    die "无法生成配置：$config_file"
+  fi
+  log "已生成配置：$config_file"
+}
+
+if [[ "$COMMAND" == "init" ]]; then
+  if (( GLOBAL_INIT )); then
+    [[ -z "$CLI_PROJECT_DIR" ]] || die "init --global 不能与 --project-dir 同时使用。"
+    [[ -n "${HOME-}" ]] || die "未设置 HOME。"
+    INIT_HOME="$(to_bash_path "$HOME")"
+    [[ -d "$INIT_HOME" ]] || die "HOME 目录不存在：$INIT_HOME"
+    generate_config "${INIT_HOME%/}/${CONFIG_NAME}"
+  else
+    INIT_START="$(first_non_empty "$CLI_PROJECT_DIR" "$INVOKE_DIR")"
+    INIT_PROJECT="$(find_project_upward "$INIT_START")" || die "未找到 pom.xml 或 build.gradle(.kts)，请进入项目目录或使用 --project-dir。"
+    generate_config "${INIT_PROJECT}/${CONFIG_NAME}"
+  fi
+  exit 0
+fi
+(( ! GLOBAL_INIT )) || die "--global 只能与 init 一起使用。"
+(( ! FORCE_INIT )) || die "--force 只能与 init 一起使用。"
+
+declare -A GLOBAL_CONFIG=() PROJECT_CONFIG=()
+declare -A GLOBAL_ARRAY_SET=() PROJECT_ARRAY_SET=()
+GLOBAL_MAVEN_ARGS=(); PROJECT_MAVEN_ARGS=()
+GLOBAL_GRADLE_ARGS=(); PROJECT_GRADLE_ARGS=()
+GLOBAL_JAVA_OPTS=(); PROJECT_JAVA_OPTS=()
+GLOBAL_APPLICATION_ARGS=(); PROJECT_APPLICATION_ARGS=()
+GLOBAL_WATCH_PATHS=(); PROJECT_WATCH_PATHS=()
+
+read_config() {
+  local config_file="$1" layer="$2"
+  local base_dir raw_line line key value line_number=0
+  local -n values="${layer}_CONFIG"
+  local -n array_set="${layer}_ARRAY_SET"
+  local -n maven_args="${layer}_MAVEN_ARGS"
+  local -n gradle_args="${layer}_GRADLE_ARGS"
+  local -n java_opts="${layer}_JAVA_OPTS"
+  local -n application_args="${layer}_APPLICATION_ARGS"
+  local -n watch_paths="${layer}_WATCH_PATHS"
+  base_dir="$(cd "$(dirname "$config_file")" && pwd -P)" || die "无法进入配置目录：$config_file"
+  while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
+    ((line_number += 1))
+    raw_line="${raw_line%$'\r'}"
+    (( line_number != 1 )) || raw_line="${raw_line#$'\xEF\xBB\xBF'}"
+    line="$(trim "$raw_line")"
+    [[ -n "$line" && "$line" != \#* ]] || continue
+    [[ "$line" == *=* ]] || die "配置错误：${config_file}:${line_number}，应使用 key=value。"
+    key="$(trim "${line%%=*}")"
+    value="$(trim "${line#*=}")"
+    [[ "$key" =~ ^[a-z_]+$ ]] || die "配置错误：${config_file}:${line_number}，配置名无效。"
+    case "$key" in
+      project_dir|java_home|maven_home|gradle_home|jar_file|env_file)
+        [[ -z "$value" ]] || value="$(absolute_from_base "$value" "$base_dir")"
+        values["$key"]="$value"
+        ;;
+      build_tool|java_version|spring_profile|restart_delay_seconds|poll_interval_seconds|stop_timeout_seconds|restart_mode)
+        values["$key"]="$value"
+        ;;
+      maven_arg)
+        array_set["$key"]=1
+        [[ -z "$value" ]] || maven_args+=("$value")
+        ;;
+      gradle_arg)
+        array_set["$key"]=1
+        [[ -z "$value" ]] || gradle_args+=("$value")
+        ;;
+      java_opt)
+        array_set["$key"]=1
+        [[ -z "$value" ]] || java_opts+=("$value")
+        ;;
+      app_arg)
+        array_set["$key"]=1
+        [[ -z "$value" ]] || application_args+=("$value")
+        ;;
+      watch)
+        array_set["$key"]=1
+        [[ -z "$value" ]] || watch_paths+=("$(absolute_from_base "$value" "$base_dir")")
+        ;;
+      *) die "配置错误：${config_file}:${line_number}，未知配置项：$key" ;;
+    esac
+  done <"$config_file"
+  log "读取配置：$config_file"
+}
+
+setting_value() {
+  local key="$1" cli="$2" header="$3" environment="$4" fallback="$5"
+  first_non_empty "$cli" "${PROJECT_CONFIG[$key]-}" "${GLOBAL_CONFIG[$key]-}" "$header" "$environment" "$fallback"
+}
+
+setting_path() {
+  local key="$1" cli="$2" header="$3" environment="$4" base="$5"
+  local value
+  value="$(setting_value "$key" "$cli" "$header" "$environment" "" || true)"
+  [[ -z "$value" ]] || absolute_from_base "$value" "$base"
+}
+
+choose_array() {
+  local key="$1"
+  local -n result="$2" cli="$3" project="$4" global="$5" header="$6"
+  if (( ${#cli[@]} > 0 )); then
+    result=("${cli[@]}")
+  elif [[ -n "${PROJECT_ARRAY_SET[$key]-}" ]]; then
+    result=("${project[@]}")
+  elif [[ -n "${GLOBAL_ARRAY_SET[$key]-}" ]]; then
+    result=("${global[@]}")
+  else
+    result=("${header[@]}")
+  fi
+}
+
+HOME_DIR="$(to_bash_path "${HOME-}")"
+[[ -n "$HOME_DIR" && -d "$HOME_DIR" ]] || die "未找到 HOME 目录。"
+HOME_DIR="$(cd "$HOME_DIR" && pwd -P)"
+GLOBAL_FILE="${HOME_DIR}/${CONFIG_NAME}"
+[[ ! -f "$GLOBAL_FILE" ]] || read_config "$GLOBAL_FILE" GLOBAL
+
+find_local_config() {
+  local config_file
+  config_file="$(find_upward "$1" "$CONFIG_NAME")" || return 1
+  [[ "$config_file" != "$GLOBAL_FILE" ]] || return 1
+  printf '%s' "$config_file"
+}
+
+PROJECT_CONFIG_FILE=""
+if [[ -n "$CLI_PROJECT_DIR" ]]; then
+  EXPLICIT_PROJECT="$(absolute_from_base "$CLI_PROJECT_DIR" "$INVOKE_DIR")"
+  [[ -d "$EXPLICIT_PROJECT" ]] || die "项目目录不存在：$EXPLICIT_PROJECT"
+  EXPLICIT_PROJECT="$(cd "$EXPLICIT_PROJECT" && pwd -P)"
+  [[ ! -f "${EXPLICIT_PROJECT}/${CONFIG_NAME}" ]] || PROJECT_CONFIG_FILE="${EXPLICIT_PROJECT}/${CONFIG_NAME}"
+else
+  PROJECT_CONFIG_FILE="$(find_local_config "$INVOKE_DIR" || true)"
+  if [[ -z "$PROJECT_CONFIG_FILE" && -n "${GLOBAL_CONFIG[project_dir]-}" && -f "${GLOBAL_CONFIG[project_dir]}/${CONFIG_NAME}" ]]; then
+    PROJECT_CONFIG_FILE="${GLOBAL_CONFIG[project_dir]}/${CONFIG_NAME}"
+  fi
+  if [[ -z "$PROJECT_CONFIG_FILE" && -n "$PROJECT_DIR_OVERRIDE" ]]; then
+    HEADER_PROJECT="$(absolute_from_base "$PROJECT_DIR_OVERRIDE" "$INVOKE_DIR")"
+    [[ ! -f "${HEADER_PROJECT}/${CONFIG_NAME}" ]] || PROJECT_CONFIG_FILE="${HEADER_PROJECT}/${CONFIG_NAME}"
+  fi
+  if [[ -z "$PROJECT_CONFIG_FILE" ]]; then
+    PROJECT_CONFIG_FILE="$(find_local_config "$SCRIPT_DIR" || true)"
+  fi
+fi
+[[ -z "$PROJECT_CONFIG_FILE" ]] || read_config "$PROJECT_CONFIG_FILE" PROJECT
+
+PROJECT_DIR_VALUE=""
+if [[ -n "$CLI_PROJECT_DIR" ]]; then
+  PROJECT_DIR_VALUE="$(absolute_from_base "$CLI_PROJECT_DIR" "$INVOKE_DIR")"
+elif [[ -n "${PROJECT_CONFIG[project_dir]-}" ]]; then
+  PROJECT_DIR_VALUE="${PROJECT_CONFIG[project_dir]}"
+elif [[ -n "$PROJECT_CONFIG_FILE" ]]; then
+  PROJECT_DIR_VALUE="$(find_project_upward "$(dirname "$PROJECT_CONFIG_FILE")" || true)"
+fi
+if [[ -z "$PROJECT_DIR_VALUE" ]]; then
+  PROJECT_DIR_VALUE="$(setting_path project_dir "" "$PROJECT_DIR_OVERRIDE" "${SPRING_BOOT_PROJECT_DIR-}" "$INVOKE_DIR")"
+fi
+if [[ -z "$PROJECT_DIR_VALUE" ]]; then
+  PROJECT_DIR_VALUE="$(find_project_upward "$INVOKE_DIR" || true)"
+fi
+if [[ -z "$PROJECT_DIR_VALUE" ]]; then
+  PROJECT_DIR_VALUE="$(find_project_upward "$SCRIPT_DIR" || true)"
+fi
+[[ -n "$PROJECT_DIR_VALUE" && -d "$PROJECT_DIR_VALUE" ]] || die "未找到项目目录，请进入项目目录或使用 --project-dir。"
+PROJECT_DIR="$(cd "$PROJECT_DIR_VALUE" && pwd -P)"
+
+BUILD_TOOL="$(setting_value build_tool "$CLI_BUILD_TOOL" "$BUILD_TOOL_OVERRIDE" "${SPRING_BOOT_BUILD_TOOL-}" auto)"
+[[ "$BUILD_TOOL" == auto || "$BUILD_TOOL" == maven || "$BUILD_TOOL" == gradle ]] || die "build_tool 只能是 auto、maven 或 gradle。"
+if [[ "$BUILD_TOOL" == auto ]]; then
+  if has_maven_project "$PROJECT_DIR" && has_gradle_project "$PROJECT_DIR"; then
+    die "同时找到 Maven 和 Gradle 构建文件，请使用 --build-tool 指定。"
+  elif has_maven_project "$PROJECT_DIR"; then
+    BUILD_TOOL=maven
+  elif has_gradle_project "$PROJECT_DIR"; then
+    BUILD_TOOL=gradle
+  else
+    die "项目目录下没有 pom.xml 或 build.gradle(.kts)：$PROJECT_DIR"
+  fi
+elif [[ "$BUILD_TOOL" == maven ]]; then
+  has_maven_project "$PROJECT_DIR" || die "项目目录下没有 pom.xml：$PROJECT_DIR"
+else
+  has_gradle_project "$PROJECT_DIR" || die "项目目录下没有 build.gradle(.kts)：$PROJECT_DIR"
+fi
+
+SPRING_PROFILE="$(setting_value spring_profile "$CLI_SPRING_PROFILE" "$SPRING_PROFILE_OVERRIDE" "${SPRING_PROFILES_ACTIVE-}" dev)"
+RESTART_DELAY_SECONDS="$(setting_value restart_delay_seconds "$CLI_RESTART_DELAY" "$RESTART_DELAY_SECONDS_OVERRIDE" "${SPRING_BOOT_RESTART_DELAY_SECONDS-}" 3)"
+POLL_INTERVAL_SECONDS="$(setting_value poll_interval_seconds "$CLI_POLL_INTERVAL" "$POLL_INTERVAL_SECONDS_OVERRIDE" "${SPRING_BOOT_POLL_INTERVAL_SECONDS-}" 1)"
+STOP_TIMEOUT_SECONDS="$(setting_value stop_timeout_seconds "$CLI_STOP_TIMEOUT" "$STOP_TIMEOUT_SECONDS_OVERRIDE" "${SPRING_BOOT_STOP_TIMEOUT_SECONDS-}" 10)"
+RESTART_MODE="$(setting_value restart_mode "$CLI_RESTART_MODE" "$RESTART_MODE_OVERRIDE" "${SPRING_BOOT_RESTART_MODE-}" auto)"
+JAR_FILE_VALUE="$(setting_path jar_file "$CLI_JAR_FILE" "$JAR_FILE_OVERRIDE" "${SPRING_BOOT_JAR_FILE-}" "$PROJECT_DIR")"
+ENV_FILE_VALUE="$(setting_path env_file "$CLI_ENV_FILE" "$ENV_FILE_OVERRIDE" "${SPRING_BOOT_ENV_FILE-}" "$PROJECT_DIR")"
+[[ -n "$ENV_FILE_VALUE" ]] || ENV_FILE_VALUE="${PROJECT_DIR}/.env"
+
+[[ "$RESTART_DELAY_SECONDS" =~ ^[0-9]+$ ]] || die "--delay 必须是非负整数。"
+[[ "$POLL_INTERVAL_SECONDS" =~ ^[0-9]+([.][0-9]+)?$ ]] || die "--poll 必须是正数。"
+awk -v value="$POLL_INTERVAL_SECONDS" 'BEGIN { exit !(value > 0) }' || die "--poll 必须大于零。"
+[[ "$STOP_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || die "--stop-timeout 必须是非负整数。"
+[[ "$RESTART_MODE" == auto || "$RESTART_MODE" == ask ]] || die "--restart-mode 只能是 auto 或 ask。"
+
+MAVEN_BUILD_ARGS=(); GRADLE_BUILD_ARGS=(); JAVA_OPTS=(); APPLICATION_ARGS=(); WATCH_EXTRA_PATHS=()
+choose_array maven_arg MAVEN_BUILD_ARGS CLI_MAVEN_ARGS PROJECT_MAVEN_ARGS GLOBAL_MAVEN_ARGS MAVEN_BUILD_ARGS_OVERRIDE
+choose_array gradle_arg GRADLE_BUILD_ARGS CLI_GRADLE_ARGS PROJECT_GRADLE_ARGS GLOBAL_GRADLE_ARGS GRADLE_BUILD_ARGS_OVERRIDE
+choose_array java_opt JAVA_OPTS CLI_JAVA_OPTS PROJECT_JAVA_OPTS GLOBAL_JAVA_OPTS JAVA_OPTS_OVERRIDE
+choose_array app_arg APPLICATION_ARGS CLI_APPLICATION_ARGS PROJECT_APPLICATION_ARGS GLOBAL_APPLICATION_ARGS APPLICATION_ARGS_OVERRIDE
+choose_array watch WATCH_EXTRA_PATHS CLI_WATCH_PATHS PROJECT_WATCH_PATHS GLOBAL_WATCH_PATHS WATCH_EXTRA_PATHS_OVERRIDE
+if (( ${#MAVEN_BUILD_ARGS[@]} == 0 )) && [[ -z "${PROJECT_ARRAY_SET[maven_arg]-}${GLOBAL_ARRAY_SET[maven_arg]-}" ]]; then
+  MAVEN_BUILD_ARGS=(-DskipTests package)
+fi
+if (( ${#GRADLE_BUILD_ARGS[@]} == 0 )) && [[ -z "${PROJECT_ARRAY_SET[gradle_arg]-}${GLOBAL_ARRAY_SET[gradle_arg]-}" ]]; then
+  GRADLE_BUILD_ARGS=(build -x test)
+fi
+
+normalize_java_major() {
+  local value="$1"
+  if [[ "$value" =~ ^1\.([0-9]+)([._+~-].*)?$ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  elif [[ "$value" =~ ^([0-9]+)([._+~-].*)?$ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  else
+    return 1
+  fi
+}
+
+major_from_expression() {
+  local value="$1"
+  [[ "$value" != *'$'* ]] || return 1
+  if [[ "$value" =~ VERSION_1_([0-9]+) ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  elif [[ "$value" =~ VERSION_([0-9]+) ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  elif [[ "$value" =~ (^|[^0-9])1\.([0-9]+) ]]; then
+    printf '%s' "${BASH_REMATCH[2]}"
+  elif [[ "$value" =~ (^|[^0-9])([0-9]+) ]]; then
+    printf '%s' "${BASH_REMATCH[2]}"
+  else
+    return 1
+  fi
+}
+
+xml_tag_value() {
+  local xml="$1" tag="$2" pattern
+  tag="${tag//./\\.}"
+  pattern="<${tag}>[[:space:]]*([^<]+)[[:space:]]*</${tag}>"
+  [[ "$xml" =~ $pattern ]] || return 1
+  trim "${BASH_REMATCH[1]}"
+}
+
+detect_maven_java_version() {
+  local xml candidate property major
+  xml="$(awk '
+    BEGIN { comment = 0 }
+    {
+      line = $0; output = ""
+      while (length(line)) {
+        if (comment) {
+          finish = index(line, "-->")
+          if (!finish) break
+          line = substr(line, finish + 3); comment = 0
+        } else {
+          start = index(line, "<!--")
+          if (!start) { output = output line; break }
+          output = output substr(line, 1, start - 1)
+          line = substr(line, start + 4); comment = 1
+        }
+      }
+      printf "%s ", output
+    }
+  ' "${PROJECT_DIR}/pom.xml")" || return 1
+  for property in maven.compiler.release release java.version maven.compiler.target target maven.compiler.source source; do
+    candidate="$(xml_tag_value "$xml" "$property" || true)"
+    [[ -n "$candidate" ]] || continue
+    if [[ "$candidate" =~ ^\$\{([a-zA-Z0-9_.-]+)\}$ ]]; then
+      candidate="$(xml_tag_value "$xml" "${BASH_REMATCH[1]}" || true)"
+    fi
+    major="$(major_from_expression "$candidate" || true)"
+    if [[ -n "$major" ]]; then
+      printf '%s' "$major"
+      return 0
+    fi
+  done
+  return 1
+}
+
+detect_gradle_java_version() {
+  local file content pattern candidate major
+  for file in "${PROJECT_DIR}/build.gradle" "${PROJECT_DIR}/build.gradle.kts"; do
+    [[ -f "$file" ]] || continue
+    content="$(awk '
+      BEGIN { block = 0 }
+      {
+        line = $0; output = ""
+        while (length(line)) {
+          if (block) {
+            finish = index(line, "*/")
+            if (!finish) break
+            line = substr(line, finish + 2); block = 0
+          } else {
+            start = index(line, "/*"); comment = index(line, "//")
+            if (comment && (!start || comment < start)) {
+              output = output substr(line, 1, comment - 1); break
+            }
+            if (!start) { output = output line; break }
+            output = output substr(line, 1, start - 1)
+            line = substr(line, start + 2); block = 1
+          }
+        }
+        printf "%s ", output
+      }
+    ' "$file")" || continue
+    for pattern in \
+      'JavaLanguageVersion[[:space:]]*\.[[:space:]]*of[[:space:]]*\([[:space:]]*([0-9]+)' \
+      'jvmToolchain[[:space:]]*\([[:space:]]*([0-9]+)' \
+      'targetCompatibility[[:space:]]*=[[:space:]]*([^[:space:];]+)' \
+      'sourceCompatibility[[:space:]]*=[[:space:]]*([^[:space:];]+)'; do
+      if [[ "$content" =~ $pattern ]]; then
+        candidate="${BASH_REMATCH[1]}"
+        major="$(major_from_expression "$candidate" || true)"
+        if [[ -n "$major" ]]; then
+          printf '%s' "$major"
+          return 0
+        fi
+      fi
+    done
+  done
+  return 1
+}
+
+java_binary_in_home() {
+  local bin="${1%/}/bin/java"
+  if [[ -f "$bin" ]]; then
+    printf '%s' "$bin"
+  elif [[ -f "${bin}.exe" ]]; then
+    printf '%s' "${bin}.exe"
+  else
+    return 1
+  fi
+}
+
+java_version_from_command() {
+  local output
+  output="$("$1" -version 2>&1)" || return 1
+  if [[ "$output" =~ \"([0-9][^\"]*)\" ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  elif [[ "$output" =~ version[[:space:]]+([0-9][^[:space:]]*) ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  else
+    return 1
+  fi
+}
+
+java_version_in_home() {
+  local home="$1" line binary
+  if [[ -f "${home%/}/release" ]]; then
+    while IFS= read -r line; do
+      line="${line%$'\r'}"
+      if [[ "$line" =~ ^JAVA_VERSION=\"?([^\"]+)\"?$ ]]; then
+        printf '%s' "${BASH_REMATCH[1]}"
+        return 0
+      fi
+    done <"${home%/}/release"
+  fi
+  binary="$(java_binary_in_home "$home")" || return 1
+  java_version_from_command "$binary"
+}
+
+version_is_newer() {
+  [[ -z "$2" || "$(printf '%s\n%s\n' "$2" "$1" | LC_ALL=C sort -V | awk 'END { print }')" == "$1" ]]
+}
+
+MATCHED_JDK=""
+AVAILABLE_JDKS=""
+find_jdk_in_root() {
+  local required_major="$1" root child version major best_version=""
+  MATCHED_JDK=""
+  AVAILABLE_JDKS=""
+  [[ -n "${JDK_HOME-}" ]] || return 1
+  root="$(to_bash_path "$JDK_HOME")"
+  [[ -d "$root" ]] || return 1
+  for child in "$root"/*; do
+    [[ -d "$child" ]] || continue
+    java_binary_in_home "$child" >/dev/null || continue
+    version="$(java_version_in_home "$child" || true)"
+    major="$(normalize_java_major "$version" || true)"
+    [[ -n "$major" ]] || continue
+    AVAILABLE_JDKS="${AVAILABLE_JDKS:+${AVAILABLE_JDKS}, }${version} (${child})"
+    [[ -z "$required_major" || "$major" == "$required_major" ]] || continue
+    if version_is_newer "$version" "$best_version"; then
+      best_version="$version"
+      MATCHED_JDK="$child"
+    fi
+  done
+  [[ -n "$MATCHED_JDK" ]]
+}
+
+JAVA_CMD=""
+JAVA_HOME_VALUE=""
+select_java_home() {
+  local home binary
+  home="$(to_bash_path "$1")"
+  [[ -d "$home" ]] || return 1
+  binary="$(java_binary_in_home "$home")" || return 1
+  "$binary" -version >/dev/null 2>&1 || return 1
+  JAVA_HOME_VALUE="$(cd "$home" && pwd -P)"
+  JAVA_CMD="$binary"
+}
+
+select_java_from_path() {
+  JAVA_CMD="$(command -v java 2>/dev/null)" || return 1
+  [[ -n "$JAVA_CMD" ]] || return 1
+  "$JAVA_CMD" -version >/dev/null 2>&1 || return 1
+  JAVA_HOME_VALUE=""
+}
+
+resolve_java_version() {
+  local required_major="$1" version major path_java=""
+  if find_jdk_in_root "$required_major"; then
+    if select_java_home "$MATCHED_JDK"; then
+      return 0
+    fi
+  fi
+  if [[ -n "${JAVA_HOME-}" ]] && select_java_home "$JAVA_HOME"; then
+    version="$(java_version_in_home "$JAVA_HOME_VALUE" || true)"
+    major="$(normalize_java_major "$version" || true)"
+    [[ "$major" != "$required_major" ]] || return 0
+  fi
+  if select_java_from_path; then
+    version="$(java_version_from_command "$JAVA_CMD" || true)"
+    major="$(normalize_java_major "$version" || true)"
+    [[ "$major" != "$required_major" ]] || return 0
+  fi
+  die "未找到 Java ${required_major}；JDK_HOME 中发现：${AVAILABLE_JDKS:-无}；JAVA_HOME/PATH 也没有匹配版本。"
+}
+
+JAVA_SELECTION_HOME=""
+JAVA_SELECTION_VERSION=""
+for layer in CLI PROJECT GLOBAL HEADER; do
+  case "$layer" in
+    CLI) layer_home="$CLI_JAVA_HOME"; layer_version="$CLI_JAVA_VERSION" ;;
+    PROJECT) layer_home="${PROJECT_CONFIG[java_home]-}"; layer_version="${PROJECT_CONFIG[java_version]-}" ;;
+    GLOBAL) layer_home="${GLOBAL_CONFIG[java_home]-}"; layer_version="${GLOBAL_CONFIG[java_version]-}" ;;
+    HEADER) layer_home="$JAVA_HOME_OVERRIDE"; layer_version="$JAVA_VERSION_OVERRIDE" ;;
+  esac
+  if [[ -n "$layer_home" || -n "$layer_version" ]]; then
+    JAVA_SELECTION_HOME="$layer_home"
+    JAVA_SELECTION_VERSION="$layer_version"
+    break
+  fi
+done
+
+if [[ -n "$JAVA_SELECTION_VERSION" ]]; then
+  JAVA_SELECTION_VERSION="$(normalize_java_major "$JAVA_SELECTION_VERSION")" || die "java_version 必须是 Java 主版本，如 8、17、21。"
+fi
+if [[ -n "$JAVA_SELECTION_HOME" ]]; then
+  [[ "$JAVA_SELECTION_HOME" == /* ]] || JAVA_SELECTION_HOME="$(absolute_from_base "$JAVA_SELECTION_HOME" "$INVOKE_DIR")"
+  select_java_home "$JAVA_SELECTION_HOME" || die "java_home 下没有找到 bin/java：$JAVA_SELECTION_HOME"
+  if [[ -n "$JAVA_SELECTION_VERSION" ]]; then
+    HOME_VERSION="$(java_version_in_home "$JAVA_HOME_VALUE" || true)"
+    HOME_MAJOR="$(normalize_java_major "$HOME_VERSION" || true)"
+    [[ "$HOME_MAJOR" == "$JAVA_SELECTION_VERSION" ]] || die "java_home 版本 ${HOME_VERSION:-未知} 与 java_version=${JAVA_SELECTION_VERSION} 不一致。"
+  fi
+elif [[ -n "$JAVA_SELECTION_VERSION" ]]; then
+  resolve_java_version "$JAVA_SELECTION_VERSION" || die "无法选择 Java ${JAVA_SELECTION_VERSION}。"
+else
+  if [[ "$BUILD_TOOL" == maven ]]; then
+    DETECTED_JAVA_VERSION="$(detect_maven_java_version || true)"
+  else
+    DETECTED_JAVA_VERSION="$(detect_gradle_java_version || true)"
+  fi
+  if [[ -n "$DETECTED_JAVA_VERSION" ]]; then
+    log "项目声明 Java ${DETECTED_JAVA_VERSION}，自动选择匹配 JDK。"
+    resolve_java_version "$DETECTED_JAVA_VERSION" || die "无法选择 Java ${DETECTED_JAVA_VERSION}。"
+  elif [[ -n "${JAVA_HOME-}" ]] && select_java_home "$JAVA_HOME"; then
+    log "未识别项目 Java 版本，使用 JAVA_HOME。"
+  elif select_java_from_path; then
+    log "未识别项目 Java 版本，使用 PATH 中的 Java。"
+  elif find_jdk_in_root ""; then
+    select_java_home "$MATCHED_JDK" || die "JDK_HOME 中的 Java 不可用。"
+    log "未识别项目 Java 版本，使用 JDK_HOME 中的最高版本。"
+  else
+    die "未找到 Java；请设置 JAVA_HOME、JDK_HOME 或将 java 加入 PATH。"
+  fi
+fi
+
+MAVEN_HOME_VALUE="$(setting_path maven_home "$CLI_MAVEN_HOME" "$MAVEN_HOME_OVERRIDE" "${MAVEN_HOME-}" "$INVOKE_DIR")"
+GRADLE_HOME_EXPLICIT="$(setting_path gradle_home "$CLI_GRADLE_HOME" "$GRADLE_HOME_OVERRIDE" "" "$INVOKE_DIR")"
+BUILD_COMMAND=()
+if [[ "$BUILD_TOOL" == maven ]]; then
+  if [[ -n "$MAVEN_HOME_VALUE" ]]; then
+    if [[ -f "${MAVEN_HOME_VALUE%/}/bin/mvn" ]]; then
+      BUILD_COMMAND=("${MAVEN_HOME_VALUE%/}/bin/mvn")
+    elif [[ -f "${MAVEN_HOME_VALUE%/}/bin/mvn.cmd" ]]; then
+      BUILD_COMMAND=("${MAVEN_HOME_VALUE%/}/bin/mvn.cmd")
+    else
+      die "MAVEN_HOME 下没有找到 mvn：$MAVEN_HOME_VALUE"
+    fi
+  else
+    MAVEN_ON_PATH="$(command -v mvn 2>/dev/null || true)"
+    [[ -n "$MAVEN_ON_PATH" ]] || die "未找到 Maven；请设置 MAVEN_HOME 或将 mvn 加入 PATH。"
+    BUILD_COMMAND=("$MAVEN_ON_PATH")
+  fi
+  BUILD_ARGS=("${MAVEN_BUILD_ARGS[@]}")
+  BUILD_OUTPUT_DIR="${PROJECT_DIR}/target"
+  RUN_DIR="${BUILD_OUTPUT_DIR}/.spring-boot-dev-run"
+else
+  GRADLE_HOME_VALUE="$GRADLE_HOME_EXPLICIT"
+  if [[ -z "$GRADLE_HOME_VALUE" && -f "${PROJECT_DIR}/gradlew" ]]; then
+    BUILD_COMMAND=(bash "${PROJECT_DIR}/gradlew")
+  elif [[ -z "$GRADLE_HOME_VALUE" && -f "${PROJECT_DIR}/gradlew.bat" ]]; then
+    BUILD_COMMAND=("${PROJECT_DIR}/gradlew.bat")
+  else
+    [[ -n "$GRADLE_HOME_VALUE" ]] || GRADLE_HOME_VALUE="$(setting_path gradle_home "" "" "${GRADLE_HOME-}" "$INVOKE_DIR")"
+    if [[ -n "$GRADLE_HOME_VALUE" ]]; then
+      if [[ -f "${GRADLE_HOME_VALUE%/}/bin/gradle" ]]; then
+        BUILD_COMMAND=("${GRADLE_HOME_VALUE%/}/bin/gradle")
+      elif [[ -f "${GRADLE_HOME_VALUE%/}/bin/gradle.bat" ]]; then
+        BUILD_COMMAND=("${GRADLE_HOME_VALUE%/}/bin/gradle.bat")
+      else
+        die "GRADLE_HOME 下没有找到 gradle：$GRADLE_HOME_VALUE"
+      fi
+    else
+      GRADLE_ON_PATH="$(command -v gradle 2>/dev/null || true)"
+      [[ -n "$GRADLE_ON_PATH" ]] || die "未找到 Gradle；请设置 GRADLE_HOME 或将 gradle 加入 PATH。"
+      BUILD_COMMAND=("$GRADLE_ON_PATH")
+    fi
+  fi
+  BUILD_ARGS=("${GRADLE_BUILD_ARGS[@]}")
+  BUILD_OUTPUT_DIR="${PROJECT_DIR}/build/libs"
+  RUN_DIR="${PROJECT_DIR}/build/.spring-boot-dev-run"
+fi
+
+if [[ -n "$JAVA_HOME_VALUE" ]]; then
+  export JAVA_HOME="$JAVA_HOME_VALUE"
+  export PATH="${JAVA_HOME_VALUE%/}/bin:${PATH}"
+else
+  unset JAVA_HOME
+fi
+if [[ "$BUILD_TOOL" == maven && -n "$MAVEN_HOME_VALUE" ]]; then
+  export MAVEN_HOME="$MAVEN_HOME_VALUE"
+  export PATH="${MAVEN_HOME_VALUE%/}/bin:${PATH}"
+elif [[ "$BUILD_TOOL" == gradle && -n "${GRADLE_HOME_VALUE-}" ]]; then
+  export GRADLE_HOME="$GRADLE_HOME_VALUE"
+  export PATH="${GRADLE_HOME_VALUE%/}/bin:${PATH}"
+fi
+export SPRING_PROFILES_ACTIVE="$SPRING_PROFILE"
+
+if [[ "$BUILD_TOOL" == maven ]] && ! grep -q 'spring-boot' "${PROJECT_DIR}/pom.xml"; then
+  log "警告：pom.xml 未直接包含 spring-boot，可能由父项目继承。"
+fi
+
+DOTENV_ASSIGNMENTS=()
+PARSED_ENV_VALUE=""
+
+parse_env_value() {
+  local raw_value
+  local single_quote_pattern="^'([^']*)'[[:space:]]*(#.*)?$"
+  local double_quote_pattern='^"(.*)"[[:space:]]*(#.*)?$'
+  local comment_pattern='^(.*[^[:space:]])[[:space:]]+#.*$'
+
+  raw_value="$(trim "$1")"
+  if [[ -z "$raw_value" ]]; then
+    PARSED_ENV_VALUE=""
+  elif [[ "$raw_value" == \'* ]]; then
+    [[ "$raw_value" =~ $single_quote_pattern ]] || return 1
+    PARSED_ENV_VALUE="${BASH_REMATCH[1]}"
+  elif [[ "$raw_value" == \"* ]]; then
+    [[ "$raw_value" =~ $double_quote_pattern ]] || return 1
+    PARSED_ENV_VALUE="${BASH_REMATCH[1]}"
+  elif [[ "$raw_value" == \#* ]]; then
+    PARSED_ENV_VALUE=""
+  elif [[ "$raw_value" =~ $comment_pattern ]]; then
+    PARSED_ENV_VALUE="$(trim "${BASH_REMATCH[1]}")"
+  else
+    PARSED_ENV_VALUE="$raw_value"
+  fi
+}
+
+load_env_file() {
+  local raw_line
+  local line
+  local key
+  local raw_value
+  local line_number=0
+  local loaded_count=0
+  local skipped_count=0
+  local -a env_keys=()
+  local -A env_values=()
+
+  DOTENV_ASSIGNMENTS=()
+  if [[ ! -f "$ENV_FILE_VALUE" ]]; then
+    log "环境变量文件不存在，跳过：$ENV_FILE_VALUE"
+    return 0
+  fi
+
+  while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
+    ((line_number += 1))
+    raw_line="${raw_line%$'\r'}"
+    if (( line_number == 1 )); then
+      raw_line="${raw_line#$'\xEF\xBB\xBF'}"
+    fi
+    line="$(trim "$raw_line")"
+    [[ -n "$line" ]] || continue
+    [[ "$line" != \#* ]] || continue
+
+    if [[ "$line" == export[[:space:]]* ]]; then
+      line="$(trim "${line#export}")"
+    fi
+    if [[ "$line" != *=* ]]; then
+      log "环境变量文件错误：${ENV_FILE_VALUE}:${line_number}，应使用 KEY=VALUE。"
+      return 1
+    fi
+
+    key="$(trim "${line%%=*}")"
+    raw_value="${line#*=}"
+    if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      log "环境变量文件错误：${ENV_FILE_VALUE}:${line_number}，变量名无效。"
+      return 1
+    fi
+    if ! parse_env_value "$raw_value"; then
+      log "环境变量文件错误：${ENV_FILE_VALUE}:${line_number}，引号不完整。"
+      return 1
+    fi
+
+    if [[ -z "${env_values[$key]+存在}" ]]; then
+      env_keys+=("$key")
+    fi
+    env_values["$key"]="$PARSED_ENV_VALUE"
+  done <"$ENV_FILE_VALUE"
+
+  for key in "${env_keys[@]}"; do
+    if printenv "$key" >/dev/null 2>&1; then
+      ((skipped_count += 1))
+      continue
+    fi
+    DOTENV_ASSIGNMENTS+=("${key}=${env_values[$key]}")
+    ((loaded_count += 1))
+  done
+
+  log "读取环境变量文件：$ENV_FILE_VALUE；加载 ${loaded_count} 项，保留已有变量 ${skipped_count} 项。"
+}
+
+fingerprint_watched_files() {
+  (
+    cd "$PROJECT_DIR" || exit 1
+
+    local source_dir
+    for source_dir in src/main/java src/main/kotlin src/main/groovy; do
+      if [[ -d "$source_dir" ]]; then
+        find "$source_dir" -type f -printf '%T@|%s|%p\0'
+      fi
+    done
+    if [[ -d src/main/resources ]]; then
+      find src/main/resources -type f -printf '%T@|%s|%p\0'
+    fi
+    local -a build_files=()
+    if [[ "$BUILD_TOOL" == maven ]]; then
+      build_files=(pom.xml .mvn/maven.config .mvn/jvm.config)
+    else
+      build_files=(build.gradle build.gradle.kts settings.gradle settings.gradle.kts gradle.properties gradle/libs.versions.toml gradle/wrapper/gradle-wrapper.properties)
+    fi
+    for config_file in "${build_files[@]}"; do
+      if [[ -f "$config_file" ]]; then
+        find "$config_file" -maxdepth 0 -type f -printf '%T@|%s|%p\0'
+      fi
+    done
+    if [[ -f "$ENV_FILE_VALUE" ]]; then
+      find "$ENV_FILE_VALUE" -maxdepth 0 -type f -printf '%T@|%s|%p\0'
+    fi
+
+    local extra_path
+    local normalized_extra_path
+    for extra_path in "${WATCH_EXTRA_PATHS[@]}"; do
+      normalized_extra_path="$(to_bash_path "$extra_path")"
+      if [[ "$normalized_extra_path" != /* ]]; then
+        normalized_extra_path="${PROJECT_DIR}/${normalized_extra_path}"
+      fi
+      if [[ -d "$normalized_extra_path" ]]; then
+        find "$normalized_extra_path" -type f -printf '%T@|%s|%p\0'
+      elif [[ -f "$normalized_extra_path" ]]; then
+        find "$normalized_extra_path" -maxdepth 0 -type f -printf '%T@|%s|%p\0'
+      fi
+    done
+  ) | LC_ALL=C sort -z | sha256sum | awk '{print $1}'
+}
+
+build_project() {
+  log "开始构建；构建成功前旧服务保持运行。"
+  (
+    cd "$PROJECT_DIR" || exit 1
+    "${BUILD_COMMAND[@]}" "${BUILD_ARGS[@]}"
+  )
+}
+
+resolve_jar_file() {
+  local candidate
+  local candidate_mtime
+  local latest_path=""
+  local latest_mtime=0
+
+  if [[ -n "$JAR_FILE_VALUE" ]]; then
+    [[ -f "$JAR_FILE_VALUE" ]] || return 1
+    printf '%s' "$JAR_FILE_VALUE"
+    return 0
+  fi
+
+  [[ -d "$BUILD_OUTPUT_DIR" ]] || return 1
+  while IFS= read -r -d '' candidate; do
+    candidate_mtime="$(stat -c '%Y' "$candidate" 2>/dev/null || printf '0')"
+    if (( candidate_mtime >= latest_mtime )); then
+      latest_mtime="$candidate_mtime"
+      latest_path="$candidate"
+    fi
+  done < <(
+    find "$BUILD_OUTPUT_DIR" -maxdepth 1 -type f -name '*.jar' \
+      ! -name 'original-*.jar' \
+      ! -name '*-sources.jar' \
+      ! -name '*-javadoc.jar' \
+      ! -name '*-tests.jar' \
+      ! -name '*-plain.jar' \
+      -print0
+  )
+
+  [[ -n "$latest_path" ]] || return 1
+  printf '%s' "$latest_path"
+}
+
+SERVICE_PID=""
+CURRENT_RUN_JAR=""
+PREVIOUS_RUN_JAR=""
+SHUTDOWN_STARTED=0
+
+prepare_run_jar() {
+  local built_jar="$1"
+  local generation
+  local next_run_jar
+
+  mkdir -p "$RUN_DIR" || return 1
+  generation="$(date '+%Y%m%d-%H%M%S')-${BASHPID}-${RANDOM}"
+  next_run_jar="${RUN_DIR}/application-${generation}.jar"
+  cp "$built_jar" "$next_run_jar" || return 1
+  printf '%s' "$next_run_jar"
+}
+
+stop_service() {
+  local waited=0
+  local wait_limit=$((STOP_TIMEOUT_SECONDS * 10))
+  local exit_code=0
+
+  if [[ -z "$SERVICE_PID" ]]; then
+    return 0
+  fi
+
+  if kill -0 "$SERVICE_PID" 2>/dev/null; then
+    log "停止服务，进程号：$SERVICE_PID"
+    kill -TERM "$SERVICE_PID" 2>/dev/null || true
+    while kill -0 "$SERVICE_PID" 2>/dev/null && (( waited < wait_limit )); do
+      sleep 0.1
+      ((waited += 1))
+    done
+    if kill -0 "$SERVICE_PID" 2>/dev/null; then
+      log "正常停止超时，强制结束进程：$SERVICE_PID"
+      kill -KILL "$SERVICE_PID" 2>/dev/null || true
+    fi
+  fi
+
+  wait "$SERVICE_PID" 2>/dev/null || exit_code=$?
+  SERVICE_PID=""
+  return "$exit_code"
+}
+
+start_service() {
+  local run_jar="$1"
+
+  PREVIOUS_RUN_JAR="$CURRENT_RUN_JAR"
+  CURRENT_RUN_JAR="$run_jar"
+
+  log "启动服务，Spring Boot 环境：${SPRING_PROFILES_ACTIVE}"
+  env "${DOTENV_ASSIGNMENTS[@]}" "$JAVA_CMD" "${JAVA_OPTS[@]}" -jar "$CURRENT_RUN_JAR" "${APPLICATION_ARGS[@]}" </dev/null &
+  SERVICE_PID=$!
+  log "服务进程号：$SERVICE_PID"
+
+  if [[ -n "$PREVIOUS_RUN_JAR" && "$PREVIOUS_RUN_JAR" != "$CURRENT_RUN_JAR" ]]; then
+    rm -f -- "$PREVIOUS_RUN_JAR" 2>/dev/null || true
+    PREVIOUS_RUN_JAR=""
+  fi
+}
+
+confirm_restart() {
+  local answer
+
+  [[ "$RESTART_MODE" == "ask" ]] || return 0
+  if [[ ! -t 0 || ! -r /dev/tty || ! -w /dev/tty ]]; then
+    log "当前不是交互终端，已跳过重启；无人值守时请使用 restart_mode=auto。"
+    return 1
+  fi
+
+  while true; do
+    printf '检测到项目修改，是否重新构建并重启？[y/N/a/q] ' >/dev/tty
+    if ! IFS= read -r answer </dev/tty; then
+      printf '\n' >/dev/tty
+      log "无法读取确认输入，已跳过重启。"
+      return 1
+    fi
+    case "${answer,,}" in
+      y|yes) return 0 ;;
+      ""|n|no) return 1 ;;
+      a)
+        RESTART_MODE="auto"
+        log "本次会话后续修改将自动重启。"
+        return 0
+        ;;
+      q)
+        log "用户请求退出。"
+        exit 0
+        ;;
+      *) printf '请输入 y、N、a 或 q。\n' >/dev/tty ;;
+    esac
+  done
+}
+
+cleanup() {
+  local ignored_exit_code=0
+  if (( SHUTDOWN_STARTED )); then
+    return
+  fi
+  SHUTDOWN_STARTED=1
+
+  stop_service || ignored_exit_code=$?
+  if [[ -n "$CURRENT_RUN_JAR" ]]; then
+    rm -f -- "$CURRENT_RUN_JAR" 2>/dev/null || true
+  fi
+  if [[ -n "$PREVIOUS_RUN_JAR" ]]; then
+    rm -f -- "$PREVIOUS_RUN_JAR" 2>/dev/null || true
+  fi
+  rmdir "$RUN_DIR" 2>/dev/null || true
+}
+
+handle_signal() {
+  printf '\n'
+  log "收到退出请求。"
+  cleanup
+  exit 130
+}
+
+trap handle_signal INT TERM
+trap cleanup EXIT
+
+log "项目目录：$PROJECT_DIR"
+log "Java：$JAVA_CMD"
+log "构建工具：$BUILD_TOOL (${BUILD_COMMAND[*]})"
+log "Spring Boot 环境：$SPRING_PROFILES_ACTIVE"
+log "环境变量文件：$ENV_FILE_VALUE"
+log "重启方式：$RESTART_MODE；防抖：${RESTART_DELAY_SECONDS} 秒；扫描：${POLL_INTERVAL_SECONDS} 秒"
+log "监听源码、资源、${BUILD_TOOL} 配置和 ${#WATCH_EXTRA_PATHS[@]} 个额外路径。"
+
+INITIAL_FINGERPRINT="$(fingerprint_watched_files)" || die "无法扫描监听文件。"
+
+if (( ! SKIP_INITIAL_BUILD )); then
+  build_project || die "首次 ${BUILD_TOOL} 构建失败。"
+fi
+
+load_env_file || die "应用环境变量加载失败。"
+BUILT_JAR="$(resolve_jar_file)" || die "未找到可执行 JAR，请先构建或使用 --jar。"
+NEXT_RUN_JAR="$(prepare_run_jar "$BUILT_JAR")" || die "无法准备运行 JAR。"
+start_service "$NEXT_RUN_JAR"
+
+OBSERVED_FINGERPRINT="$INITIAL_FINGERPRINT"
+PENDING_FINGERPRINT=""
+LAST_CHANGE_EPOCH=0
+
+while true; do
+  sleep "$POLL_INTERVAL_SECONDS"
+
+  if [[ -n "$SERVICE_PID" ]] && ! kill -0 "$SERVICE_PID" 2>/dev/null; then
+    SERVICE_EXIT_CODE=0
+    wait "$SERVICE_PID" 2>/dev/null || SERVICE_EXIT_CODE=$?
+    log "服务已退出，退出码：$SERVICE_EXIT_CODE；下次修改后将重新启动。"
+    SERVICE_PID=""
+  fi
+
+  CURRENT_FINGERPRINT="$(fingerprint_watched_files)" || {
+    log "警告：文件扫描失败，稍后重试。"
+    continue
+  }
+
+  if [[ "$CURRENT_FINGERPRINT" == "$OBSERVED_FINGERPRINT" ]]; then
+    PENDING_FINGERPRINT=""
+    continue
+  fi
+
+  NOW_EPOCH="$(date '+%s')"
+  if [[ "$CURRENT_FINGERPRINT" != "$PENDING_FINGERPRINT" ]]; then
+    PENDING_FINGERPRINT="$CURRENT_FINGERPRINT"
+    LAST_CHANGE_EPOCH="$NOW_EPOCH"
+    log "检测到修改，等待 ${RESTART_DELAY_SECONDS} 秒。"
+  fi
+
+  if (( NOW_EPOCH - LAST_CHANGE_EPOCH < RESTART_DELAY_SECONDS )); then
+    continue
+  fi
+
+  if ! confirm_restart; then
+    OBSERVED_FINGERPRINT="$(fingerprint_watched_files)" || OBSERVED_FINGERPRINT="$CURRENT_FINGERPRINT"
+    PENDING_FINGERPRINT=""
+    log "已跳过本次重启。"
+    continue
+  fi
+
+  BUILD_INPUT_FINGERPRINT="$(fingerprint_watched_files)" || BUILD_INPUT_FINGERPRINT="$CURRENT_FINGERPRINT"
+  OBSERVED_FINGERPRINT="$BUILD_INPUT_FINGERPRINT"
+  PENDING_FINGERPRINT=""
+
+  if ! build_project; then
+    log "构建失败，旧服务继续运行；再次保存文件后重试。"
+    continue
+  fi
+
+  if ! load_env_file; then
+    log "应用环境变量加载失败，旧服务继续运行。"
+    continue
+  fi
+
+  BUILT_JAR="$(resolve_jar_file)" || {
+    log "构建成功但未找到可执行 JAR，旧服务继续运行。"
+    continue
+  }
+  NEXT_RUN_JAR="$(prepare_run_jar "$BUILT_JAR")" || {
+    log "无法准备新 JAR，旧服务继续运行。"
+    continue
+  }
+
+  stop_service || true
+  start_service "$NEXT_RUN_JAR"
+done
