@@ -65,6 +65,14 @@ dotfilebiu install fzf
 dotfilebiu install git
 ```
 
+`git merged [branch]` lists local branches merged into `branch` (defaults to
+`HEAD`), excluding the target branch. Use `git merged --clean [branch]` to
+select one or more branches with `fzf`, review their local and remote names,
+and confirm deletion. The remote branch comes from the local branch's upstream;
+without an upstream, the command checks `origin` or the only configured remote
+for a branch with the same name. Cleanup stops if a remote branch has a
+different tip from its local branch.
+
 ### gvm
 
 ```sh

@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+
+clean=0
+branches=()
+selected_branches=()
+local_oids=()
+remotes=()
+remote_refs=()
+remote_oids=()
+
+if [[ "${1:-}" == --clean ]]; then
+  clean=1
+  shift
+fi
+if [[ $# -gt 1 || "${1:-}" == -* ]]; then
+  printf 'Usage: git merged [--clean] [branch]\n' >&2
+  exit 1
+fi
+branch="${1:-HEAD}"
+
+if ! git rev-parse --verify --quiet "${branch}^{commit}" >/dev/null; then
+  printf "Error: branch '%s' does not exist\n" "$branch" >&2
+  exit 1
+fi
+
+target_ref="$(git rev-parse --symbolic-full-name "$branch")" || exit 1
+merged_refs="$(git for-each-ref --merged="$branch" --format='%(refname)' refs/heads/)" || exit 1
+while IFS= read -r ref; do
+  [[ -z "$ref" || "$ref" == "$target_ref" ]] && continue
+  branches+=("${ref#refs/heads/}")
+done <<< "$merged_refs"
+
+if [[ "$clean" -eq 0 ]]; then
+  if [[ "${#branches[@]}" -gt 0 ]]; then
+    printf '%s\n' "${branches[@]}"
+  fi
+  exit 0
+fi
+
+if [[ "${#branches[@]}" -eq 0 ]]; then
+  printf 'No merged branches found.\n' >&2
+  exit 0
+fi
+if ! command -v fzf >/dev/null 2>&1; then
+  printf 'Error: fzf is required for --clean.\n' >&2
+  exit 1
+fi
+
+selection="$(printf '%s\n' "${branches[@]}" | fzf --multi --prompt='Merged branches> ' --header='Tab: select multiple, Enter: continue')"
+select_status=$?
+if [[ "$select_status" -eq 1 || "$select_status" -eq 130 ]]; then
+  exit 0
+fi
+if [[ "$select_status" -ne 0 ]]; then
+  printf 'Error: fzf failed.\n' >&2
+  exit "$select_status"
+fi
+[[ -n "$selection" ]] || exit 0
+
+while IFS= read -r selected; do
+  found=0
+  for name in "${branches[@]}"; do
+    if [[ "$selected" == "$name" ]]; then
+      found=1
+      break
+    fi
+  done
+  if [[ "$found" -ne 1 ]]; then
+    printf "Error: invalid branch selection '%s'.\n" "$selected" >&2
+    exit 1
+  fi
+  for name in "${selected_branches[@]}"; do
+    if [[ "$selected" == "$name" ]]; then
+      printf "Error: duplicate branch selection '%s'.\n" "$selected" >&2
+      exit 1
+    fi
+  done
+  selected_branches+=("$selected")
+done <<< "$selection"
+
+# Resolve every deletion before asking for confirmation. A branch without an
+# upstream uses origin (or the only configured remote) with the same name.
+for name in "${selected_branches[@]}"; do
+  ref="refs/heads/$name"
+  local_oid="$(git rev-parse --verify --quiet "$ref")" || exit 1
+  if ! git merge-base --is-ancestor "$ref" "$branch"; then
+    printf "Error: branch '%s' is no longer merged into '%s'.\n" "$name" "$branch" >&2
+    exit 1
+  fi
+  while IFS= read -r worktree_branch; do
+    if [[ "$worktree_branch" == "branch $ref" ]]; then
+      printf "Error: branch '%s' is checked out in a worktree.\n" "$name" >&2
+      exit 1
+    fi
+  done < <(git worktree list --porcelain)
+
+  info="$(git for-each-ref --format='%(upstream:remotename)%09%(upstream:remoteref)' "$ref")" || exit 1
+  remote="${info%%$'\t'*}"
+  remote_ref="${info#*$'\t'}"
+  if [[ -z "$remote" || "$remote" == . || "$remote_ref" != refs/heads/* ]]; then
+    remote=
+    remote_ref=
+    if git remote | grep -Fxq origin; then
+      remote=origin
+    else
+      info="$(git remote)" || exit 1
+      if [[ -n "$info" && "$info" != *$'\n'* ]]; then
+        remote="$info"
+      fi
+    fi
+    [[ -z "$remote" ]] || remote_ref="refs/heads/$name"
+  fi
+
+  remote_oid=
+  if [[ -n "$remote" ]]; then
+    remote_line="$(git ls-remote --heads "$remote" "$remote_ref")" || exit 1
+    if [[ -n "$remote_line" ]]; then
+      remote_oid="${remote_line%%$'\t'*}"
+      if [[ "$remote_oid" != "$local_oid" ]]; then
+        printf "Error: remote branch '%s/%s' differs from local '%s'; fetch and review it first.\n" \
+          "$remote" "${remote_ref#refs/heads/}" "$name" >&2
+        exit 1
+      fi
+    fi
+  fi
+  local_oids+=("$local_oid")
+  remotes+=("$remote")
+  remote_refs+=("$remote_ref")
+  remote_oids+=("$remote_oid")
+done
+
+printf 'Delete these merged branches?\n' >&2
+for i in "${!selected_branches[@]}"; do
+  printf '  local: %s\n' "${selected_branches[$i]}" >&2
+  if [[ -n "${remote_oids[$i]}" ]]; then
+    printf '  remote: %s/%s\n' "${remotes[$i]}" "${remote_refs[$i]#refs/heads/}" >&2
+  else
+    printf '  remote: none\n' >&2
+  fi
+done
+printf 'Confirm deletion [y/N]: ' >&2
+IFS= read -r answer || exit 0
+case "$answer" in
+  y|Y|yes|YES) ;;
+  *) exit 0 ;;
+esac
+
+for i in "${!selected_branches[@]}"; do
+  name="${selected_branches[$i]}"
+  ref="refs/heads/$name"
+  local_oid="$(git rev-parse --verify --quiet "$ref")" || exit 1
+  if [[ "$local_oid" != "${local_oids[$i]}" ]] || ! git merge-base --is-ancestor "$ref" "$branch"; then
+    printf "Error: branch '%s' changed or is no longer merged into '%s'.\n" "$name" "$branch" >&2
+    exit 1
+  fi
+  if [[ -n "${remote_oids[$i]}" ]]; then
+    git push --force-with-lease="${remote_refs[$i]}:${remote_oids[$i]}" \
+      "${remotes[$i]}" ":${remote_refs[$i]}" || exit 1
+  fi
+  local_oid="$(git rev-parse --verify --quiet "$ref")" || exit 1
+  if [[ "$local_oid" != "${local_oids[$i]}" ]]; then
+    printf "Error: branch '%s' changed before local deletion.\n" "$name" >&2
+    exit 1
+  fi
+  git branch -D -- "$name" || exit 1
+done
