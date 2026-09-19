@@ -1,0 +1,272 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: codev create <name>
+       codev refresh
+       codev --help
+
+Create a workspace directory with links to selected Git applications.
+Run refresh after adding, removing, or moving applications.
+
+Environment:
+  CODEV_CODE_DIR       Directory to search for applications (required)
+  CODEV_WORKSPACE_DIR  Workspace parent (defaults to the current directory)
+EOF
+}
+
+die() {
+  printf 'codev: %s\n' "$*" >&2
+  exit 1
+}
+
+is_windows() {
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+invocation_dir="$(pwd -P)"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+scan_file=''
+index_temp=''
+destination=''
+created_destination=0
+created_links=()
+
+to_absolute_path() {
+  local path=$1
+  if is_windows; then
+    path="$(cygpath -u "$path")" || die "cannot convert path: $1"
+  fi
+  case "$path" in
+    /*) printf '%s\n' "$path" ;;
+    *) printf '%s/%s\n' "$invocation_dir" "$path" ;;
+  esac
+}
+
+resolve_code_dir() {
+  local path
+  [[ -n "${CODEV_CODE_DIR:-}" ]] || die 'CODEV_CODE_DIR is not set.'
+  path="$(to_absolute_path "$CODEV_CODE_DIR")"
+  [[ -d "$path" && -r "$path" ]] || die "code directory is not readable: $path"
+  cd -P -- "$path" && pwd -P || die "cannot enter code directory: $path"
+}
+
+remove_created_link() {
+  local link=$1
+  if is_windows; then
+    MSYS_NO_PATHCONV=1 cmd.exe /c rmdir "$(cygpath -w "$link")" >/dev/null
+  else
+    rm -- "$link"
+  fi
+}
+
+cleanup() {
+  local status=$? i
+  if [[ -n "$scan_file" ]]; then
+    rm -f -- "$scan_file" || true
+  fi
+  if [[ -n "$index_temp" ]]; then
+    rm -f -- "$index_temp" || true
+  fi
+  if ((status != 0)); then
+    for ((i = ${#created_links[@]} - 1; i >= 0; i--)); do
+      remove_created_link "${created_links[$i]}" ||
+        printf 'codev: could not remove incomplete link: %s\n' "${created_links[$i]}" >&2
+    done
+    if ((created_destination)); then
+      rmdir -- "$destination" 2>/dev/null || true
+    fi
+  fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+link_points_to() {
+  local resolved
+  [[ -L "$1" ]] || return 1
+  resolved="$(cd -P -- "$1" && pwd -P)" || return 1
+  [[ "$resolved" == "$2" ]]
+}
+
+create_link() {
+  local source=$1 link=$2
+  if is_windows; then
+    MSYS_NO_PATHCONV=1 cmd.exe /c mklink /J \
+      "$(cygpath -w "$link")" "$(cygpath -w "$source")" >/dev/null
+  else
+    ln -s -- "$source" "$link"
+  fi
+}
+
+confirm_append() {
+  local answer
+  while :; do
+    printf 'codev: %s already exists. Add links? [Y/n] ' "$destination" >&2
+    IFS= read -r answer || return 1
+    case "$answer" in
+      ''|y|Y|yes|YES) return 0 ;;
+      n|N|no|NO) return 1 ;;
+      *) printf 'codev: enter Y or N.\n' >&2 ;;
+    esac
+  done
+}
+
+refresh_index() {
+  local code_dir index_file marker app relative count=0
+
+  code_dir="$(resolve_code_dir)"
+  index_file="$code_dir/.codev-repos"
+  [[ ! -d "$index_file" ]] || die "index path is a directory: $index_file"
+  index_temp="$(mktemp "$code_dir/.codev-repos.tmp.XXXXXX")" ||
+    die "cannot create index in: $code_dir"
+  scan_file="$(mktemp)" || die 'could not create a temporary file.'
+
+  find "$code_dir" -type d -name .git -prune -print0 >"$scan_file" ||
+    die "could not search code directory: $code_dir"
+  while IFS= read -r -d '' marker; do
+    app=${marker%/.git}
+    [[ -n "$app" ]] || app=/
+    if [[ "$app" == "$code_dir" ]]; then
+      relative=.
+    elif [[ "$code_dir" == / ]]; then
+      relative=${app#/}
+    else
+      relative=${app#"$code_dir"/}
+    fi
+    [[ "$relative" != *$'\n'* && "$relative" != *$'\r'* ]] ||
+      die "application path cannot be stored in the index: $relative"
+    printf '%s\n' "$relative" >>"$index_temp" || die "cannot write index: $index_temp"
+    ((count += 1))
+  done <"$scan_file"
+
+  [[ ! -d "$index_file" ]] || die "index path became a directory: $index_file"
+  mv -f -- "$index_temp" "$index_file" || die "cannot replace index: $index_file"
+  index_temp=''
+  printf 'Indexed %d applications: %s\n' "$count" "$index_file"
+}
+
+create_workspace() {
+  local name=$1 code_dir workspace_dir index_file app relative selection status
+  local label index found source link key previous_key existing_destination=0
+  local -a labels=() applications=() chosen_apps=() chosen_names=() chosen_keys=()
+
+  [[ -n "$name" && "$name" != . && "$name" != .. &&
+     "$name" != */* && "$name" != *\\* ]] || die 'name must be a single directory name.'
+  code_dir="$(resolve_code_dir)"
+
+  workspace_dir="$(to_absolute_path "${CODEV_WORKSPACE_DIR:-$invocation_dir}")"
+  destination="${workspace_dir%/}/$name"
+
+  index_file="$code_dir/.codev-repos"
+  [[ -f "$index_file" && -r "$index_file" ]] ||
+    die "repository index is missing or unreadable: $index_file; run 'codev refresh' first."
+  while IFS= read -r relative || [[ -n "$relative" ]]; do
+    case "$relative" in
+      .) app=$code_dir ;;
+      ''|/*|..|../*|*/..|*/../*|./*|*/.|*/./*|*//*|*$'\r'*)
+        die "invalid application path in index: $relative" ;;
+      *) app="$code_dir/$relative" ;;
+    esac
+    if is_windows && [[ "$relative" == *\\* ]]; then
+      die "invalid application path in index: $relative"
+    fi
+    labels+=("$relative")
+    applications+=("$app")
+  done <"$index_file"
+  [[ ${#labels[@]} -gt 0 ]] || die "no Git applications in index; run 'codev refresh' after adding repositories."
+
+  if selection="$(printf '%s\n' "${labels[@]}" | "$script_dir/picker" --multi --prompt 'Applications')"; then
+    :
+  else
+    status=$?
+    [[ $status -eq 1 || $status -eq 130 ]] && return 0
+    die "picker failed (exit $status)."
+  fi
+  [[ -n "$selection" ]] || return 0
+
+  while IFS= read -r label; do
+    found=0
+    for index in "${!labels[@]}"; do
+      if [[ "$label" == "${labels[$index]}" ]]; then
+        source=${applications[$index]}
+        found=1
+        break
+      fi
+    done
+    ((found)) || die "picker returned an unknown application: $label"
+    [[ -d "$source" && -d "$source/.git" ]] ||
+      die "application disappeared: $source; run 'codev refresh'."
+    source="$(cd -P -- "$source" && pwd -P)" || die "cannot enter application: $source"
+    [[ "$code_dir" == / || "$source" == "$code_dir" || "$source" == "$code_dir/"* ]] ||
+      die "indexed application is outside code directory: $source"
+    [[ "$source" != / ]] || die 'the filesystem root cannot be linked as an application.'
+    chosen_apps+=("$source")
+    chosen_names+=("${source##*/}")
+  done <<<"$selection"
+
+  for index in "${!chosen_names[@]}"; do
+    key=${chosen_names[$index]}
+    if is_windows; then key=${key,,}; fi
+    for previous_key in "${chosen_keys[@]}"; do
+      [[ "$key" != "$previous_key" ]] || die "selected applications share the link name: ${chosen_names[$index]}"
+    done
+    chosen_keys+=("$key")
+  done
+
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    [[ -d "$destination" && ! -L "$destination" ]] || die "destination is not a regular directory: $destination"
+    confirm_append || return 0
+    existing_destination=1
+  fi
+
+  for index in "${!chosen_apps[@]}"; do
+    link="$destination/${chosen_names[$index]}"
+    if [[ -e "$link" || -L "$link" ]]; then
+      link_points_to "$link" "${chosen_apps[$index]}" || die "link name is occupied: $link"
+    fi
+  done
+
+  mkdir -p -- "$workspace_dir" || die "cannot create workspace directory: $workspace_dir"
+  if ((existing_destination)); then
+    [[ -d "$destination" && ! -L "$destination" ]] || die "destination changed: $destination"
+  else
+    mkdir -- "$destination" || die "cannot create destination: $destination"
+    created_destination=1
+  fi
+
+  for index in "${!chosen_apps[@]}"; do
+    link="$destination/${chosen_names[$index]}"
+    if [[ -e "$link" || -L "$link" ]]; then
+      link_points_to "$link" "${chosen_apps[$index]}" || die "link name became occupied: $link"
+      continue
+    fi
+    create_link "${chosen_apps[$index]}" "$link" || die "could not create link: $link"
+    created_links+=("$link")
+    printf '%s -> %s\n' "$link" "${chosen_apps[$index]}"
+  done
+}
+
+case "${1:-}" in
+  create)
+    [[ $# -eq 2 ]] || { usage >&2; exit 2; }
+    create_workspace "$2"
+    ;;
+  refresh)
+    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+    refresh_index
+    ;;
+  -h|--help|help)
+    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac
