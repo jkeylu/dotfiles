@@ -61,9 +61,13 @@ usage() {
 用法：
   ${SCRIPT_NAME} [选项] [-- 应用参数]
   ${SCRIPT_NAME} init [--project-dir <目录> | --global] [--force]
+  ${SCRIPT_NAME} jdk <ls|ls-remote|install> [版本]
 
 命令：
   init                       生成配置模板
+  jdk ls                     列出本地 JDK
+  jdk ls-remote              列出远程 LTS 主版本
+  jdk install <版本>          安装最新的 Temurin LTS 补丁版本
 
 选项：
   --project-dir <目录>       Spring Boot 项目目录
@@ -97,7 +101,7 @@ usage() {
   命令行 > 项目配置 > HOME 配置 > 脚本头部覆盖值 > 环境变量 > 默认值
 
 环境变量：
-  JAVA_HOME、JDK_HOME、MAVEN_HOME、GRADLE_HOME、SPRING_BOOT_PROJECT_DIR
+  JAVA_HOME、JDK_HOME（默认 HOME/.jdks）、MAVEN_HOME、GRADLE_HOME、SPRING_BOOT_PROJECT_DIR
   SPRING_PROFILES_ACTIVE、SPRING_BOOT_BUILD_TOOL
   SPRING_BOOT_RESTART_DELAY_SECONDS、SPRING_BOOT_POLL_INTERVAL_SECONDS
   SPRING_BOOT_STOP_TIMEOUT_SECONDS、SPRING_BOOT_RESTART_MODE、SPRING_BOOT_JAR_FILE
@@ -109,6 +113,8 @@ usage() {
 示例：
   ${SCRIPT_NAME} init
   ${SCRIPT_NAME} init --global
+  ${SCRIPT_NAME} jdk ls-remote
+  ${SCRIPT_NAME} jdk install 21
   ${SCRIPT_NAME}
   ${SCRIPT_NAME} --delay 5 --profile dev
   ${SCRIPT_NAME} --restart-mode ask
@@ -168,6 +174,372 @@ absolute_from_base() {
     printf '%s/%s' "${base_dir%/}" "$path_value"
   fi
 }
+
+# ------------------------- JDK 命令与发现 -------------------------
+
+jdk_root() {
+  local root="${JDK_HOME-}" home
+  if [[ -z "$root" ]]; then
+    [[ -n "${HOME-}" ]] || return 1
+    home="$(to_bash_path "$HOME")"
+    root="${home%/}/.jdks"
+  fi
+  absolute_from_base "$root" "$INVOKE_DIR"
+}
+
+jdk_home_from_directory() {
+  local directory="$1"
+  if java_binary_in_home "$directory" >/dev/null; then
+    printf '%s' "$directory"
+  elif java_binary_in_home "$directory/Contents/Home" >/dev/null; then
+    printf '%s/Contents/Home' "$directory"
+  else
+    return 1
+  fi
+}
+
+java_binary_in_home() {
+  local bin="${1%/}/bin/java"
+  if [[ -f "$bin" ]]; then
+    printf '%s' "$bin"
+  elif [[ -f "${bin}.exe" ]]; then
+    printf '%s' "${bin}.exe"
+  else
+    return 1
+  fi
+}
+
+normalize_java_major() {
+  local value="$1"
+  if [[ "$value" =~ ^1\.([0-9]+)([._+~-].*)?$ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  elif [[ "$value" =~ ^([0-9]+)([._+~-].*)?$ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  else
+    return 1
+  fi
+}
+
+java_version_from_command() {
+  local output
+  output="$("$1" -version 2>&1)" || return 1
+  if [[ "$output" =~ \"([0-9][^\"]*)\" ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  elif [[ "$output" =~ version[[:space:]]+([0-9][^[:space:]]*) ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  else
+    return 1
+  fi
+}
+
+java_version_in_home() {
+  local home="$1" line binary
+  if [[ -f "${home%/}/release" ]]; then
+    while IFS= read -r line; do
+      line="${line%$'\r'}"
+      if [[ "$line" =~ ^JAVA_VERSION=\"?([^\"]+)\"?$ ]]; then
+        printf '%s' "${BASH_REMATCH[1]}"
+        return 0
+      fi
+    done <"${home%/}/release"
+  fi
+  binary="$(java_binary_in_home "$home")" || return 1
+  java_version_from_command "$binary"
+}
+
+jdk_valid_home() {
+  local binary version major binary_version binary_major
+  binary="$(java_binary_in_home "$1")" || return 1
+  binary_version="$(java_version_from_command "$binary")" || return 1
+  binary_major="$(normalize_java_major "$binary_version")" || return 1
+  version="$(java_version_in_home "$1")" || return 1
+  major="$(normalize_java_major "$version")" || return 1
+  [[ "$major" == "$binary_major" ]]
+}
+
+jdk_version_numbers() {
+  local rest="$1" number
+  JDK_VERSION_PARTS=()
+  [[ "$rest" != 1.* ]] || rest="${rest#1.}"
+  while [[ "$rest" =~ ([0-9]+) ]]; do
+    number="${BASH_REMATCH[1]}"
+    JDK_VERSION_PARTS+=("$((10#$number))")
+    rest="${rest#*${number}}"
+  done
+}
+
+version_is_newer() {
+  local candidate="$1" previous="$2" index left right
+  local -a candidate_parts=() previous_parts=()
+  [[ -n "$previous" ]] || return 0
+  jdk_version_numbers "$candidate"
+  candidate_parts=("${JDK_VERSION_PARTS[@]}")
+  jdk_version_numbers "$previous"
+  previous_parts=("${JDK_VERSION_PARTS[@]}")
+  for ((index = 0; index < ${#candidate_parts[@]} || index < ${#previous_parts[@]}; index++)); do
+    left="${candidate_parts[index]:-0}"
+    right="${previous_parts[index]:-0}"
+    if (( left > right )); then return 0; fi
+    if (( left < right )); then return 1; fi
+  done
+  return 0
+}
+
+MATCHED_JDK=""
+AVAILABLE_JDKS=""
+find_jdk_in_root() {
+  local required_major="$1" root child home version major best_version=""
+  MATCHED_JDK=""
+  AVAILABLE_JDKS=""
+  root="$(jdk_root)" || return 1
+  [[ -d "$root" ]] || return 1
+  for child in "$root"/*; do
+    [[ -d "$child" ]] || continue
+    home="$(jdk_home_from_directory "$child" || true)"
+    [[ -n "$home" ]] || continue
+    jdk_valid_home "$home" || continue
+    version="$(java_version_in_home "$home" || true)"
+    major="$(normalize_java_major "$version" || true)"
+    [[ -n "$major" ]] || continue
+    AVAILABLE_JDKS="${AVAILABLE_JDKS:+${AVAILABLE_JDKS}, }${version} (${home})"
+    [[ -z "$required_major" || "$major" == "$required_major" ]] || continue
+    if version_is_newer "$version" "$best_version"; then
+      best_version="$version"
+      MATCHED_JDK="$home"
+    fi
+  done
+  [[ -n "$MATCHED_JDK" ]]
+}
+
+jdk_ls() {
+  local root child home version major index temp
+  local -a versions=() homes=()
+  root="$(jdk_root)" || die "未设置 HOME 或 JDK_HOME。"
+  [[ -d "$root" ]] || return 0
+  for child in "$root"/*; do
+    [[ -d "$child" ]] || continue
+    home="$(jdk_home_from_directory "$child" || true)"
+    [[ -n "$home" ]] || continue
+    jdk_valid_home "$home" || continue
+    version="$(java_version_in_home "$home" || true)"
+    major="$(normalize_java_major "$version" || true)"
+    [[ -n "$major" ]] || continue
+    versions+=("$version")
+    homes+=("$home")
+    for ((index = ${#versions[@]} - 1; index > 0; index--)); do
+      version_is_newer "${versions[index]}" "${versions[index-1]}" || break
+      temp="${versions[index-1]}"
+      versions[index-1]="${versions[index]}"
+      versions[index]="$temp"
+      temp="${homes[index-1]}"
+      homes[index-1]="${homes[index]}"
+      homes[index]="$temp"
+    done
+  done
+  for index in "${!versions[@]}"; do
+    printf '%s\t%s\n' "${versions[index]}" "${homes[index]}"
+  done
+}
+
+jdk_remote_lts() {
+  local response pattern versions value
+  command -v curl >/dev/null 2>&1 || die "远程 JDK 命令需要 curl。"
+  response="$(curl --fail --silent --show-error --location --connect-timeout 15 --retry 2 \
+    'https://api.adoptium.net/v3/info/available_releases')" || die "无法读取 Adoptium LTS 版本列表。"
+  pattern='"available_lts_releases"[[:space:]]*:[[:space:]]*\[([^]]+)\]'
+  [[ "$response" =~ $pattern ]] || die "Adoptium 返回的 LTS 版本列表格式无效。"
+  versions="${BASH_REMATCH[1]}"
+  versions="${versions//[[:space:]]/}"
+  [[ "$versions" =~ ^[0-9]+(,[0-9]+)*$ ]] || die "Adoptium 返回的 LTS 版本列表格式无效。"
+  local -a items=()
+  IFS=, read -r -a items <<< "$versions"
+  for value in "${items[@]}"; do
+    printf '%s\n' "$value"
+  done
+}
+
+jdk_platform() {
+  local system machine
+  system="$(uname -s)" || die "无法识别操作系统。"
+  machine="$(uname -m)" || die "无法识别处理器架构。"
+  case "$system" in
+    MINGW*|MSYS*|CYGWIN*) JDK_API_OS=windows; JDK_ARCHIVE_TYPE=zip ;;
+    Linux*) JDK_API_OS=linux; JDK_ARCHIVE_TYPE=tar.gz ;;
+    Darwin*) JDK_API_OS=mac; JDK_ARCHIVE_TYPE=tar.gz ;;
+    *) die "不支持的操作系统：$system" ;;
+  esac
+  case "$machine" in
+    x86_64|amd64) JDK_API_ARCH=x64 ;;
+    i386|i486|i586|i686|x86) JDK_API_ARCH=x86 ;;
+    aarch64|arm64) JDK_API_ARCH=aarch64 ;;
+    armv7l|armv6l) JDK_API_ARCH=arm ;;
+    ppc64le|s390x|riscv64) JDK_API_ARCH="$machine" ;;
+    *) die "不支持的处理器架构：$machine" ;;
+  esac
+}
+
+jdk_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{ print $1 }'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{ print $1 }'
+  else
+    die "校验下载文件需要 sha256sum 或 shasum。"
+  fi
+}
+
+jdk_archive_root() {
+  local archive="$1" type="$2" entries entry first root=""
+  if [[ "$type" == zip ]]; then
+    entries="$(unzip -Z1 "$archive")" || return 1
+  else
+    entries="$(tar -tzf "$archive")" || return 1
+  fi
+  while IFS= read -r entry || [[ -n "$entry" ]]; do
+    entry="${entry#./}"
+    [[ -n "$entry" ]] || continue
+    [[ "$entry" != /* && "$entry" != *\\* ]] || return 1
+    case "/$entry/" in */../*|*/./*) return 1 ;; esac
+    first="${entry%%/*}"
+    [[ "$first" != . && "$first" != .. && "$first" =~ ^[A-Za-z0-9._+~-]+$ ]] || return 1
+    if [[ -z "$root" ]]; then
+      root="$first"
+    elif [[ "$root" != "$first" ]]; then
+      return 1
+    fi
+  done <<< "$entries"
+  [[ -n "$root" ]] || return 1
+  printf '%s' "$root"
+}
+
+JDK_INSTALL_STAGE=""
+JDK_INSTALL_ROOT=""
+jdk_cleanup_install() {
+  [[ -n "$JDK_INSTALL_STAGE" && -n "$JDK_INSTALL_ROOT" ]] || return 0
+  case "$JDK_INSTALL_STAGE" in
+    "$JDK_INSTALL_ROOT"/.jdev-install.*)
+      [[ ! -L "$JDK_INSTALL_STAGE" ]] || return 1
+      rm -rf "$JDK_INSTALL_STAGE"
+      ;;
+  esac
+}
+
+jdk_install() {
+  local requested="$1" released version root stage archive api final_url checksum_url
+  local expected actual archive_root extracted home binary binary_version installed_major destination existing_home existing_version
+  [[ "$requested" =~ ^[1-9][0-9]*$ ]] || die "请指定 LTS 主版本号，例如：jdev jdk install 17。"
+  released="$(jdk_remote_lts)" || return 1
+  [[ $'\n'"$released"$'\n' == *$'\n'"$requested"$'\n'* ]] || die "Java ${requested} 不在远程 LTS 列表中。"
+  jdk_platform
+  command -v awk >/dev/null 2>&1 || die "安装 JDK 需要 awk。"
+  command -v mktemp >/dev/null 2>&1 || die "安装 JDK 需要 mktemp。"
+  if [[ "$JDK_ARCHIVE_TYPE" == zip ]]; then
+    command -v unzip >/dev/null 2>&1 || die "Windows JDK 安装需要 unzip。"
+  else
+    command -v tar >/dev/null 2>&1 || die "JDK 安装需要 tar。"
+  fi
+  if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+    die "校验下载文件需要 sha256sum 或 shasum。"
+  fi
+  root="$(jdk_root)" || die "未设置 HOME 或 JDK_HOME。"
+  mkdir -p "$root" || die "无法创建 JDK 目录：$root"
+  root="$(cd "$root" && pwd -P)" || die "无法进入 JDK 目录：$root"
+  stage="$(mktemp -d "${root}/.jdev-install.XXXXXX")" || die "无法创建下载临时目录。"
+  JDK_INSTALL_ROOT="$root"
+  JDK_INSTALL_STAGE="$stage"
+  trap jdk_cleanup_install EXIT
+  trap 'exit 130' INT TERM
+
+  api="https://api.adoptium.net/v3/binary/latest/${requested}/ga/${JDK_API_OS}/${JDK_API_ARCH}/jdk/hotspot/normal/eclipse"
+  archive="${stage}/jdk.${JDK_ARCHIVE_TYPE}"
+  log "下载 Eclipse Temurin ${requested} (${JDK_API_OS}/${JDK_API_ARCH})。"
+  final_url="$(curl --fail --silent --show-error --location --connect-timeout 15 --retry 2 \
+    --output "$archive" --write-out '%{url_effective}' "$api")" || die "下载失败；当前平台可能没有 Java ${requested} 的 JDK 包。"
+  [[ "$final_url" == https://* ]] || die "下载地址不是 HTTPS。"
+  checksum_url="${final_url%%\?*}.sha256.txt"
+  curl --fail --silent --show-error --location --connect-timeout 15 --retry 2 \
+    --output "${stage}/checksum" "$checksum_url" || die "无法下载 SHA-256 校验文件。"
+  expected="$(awk 'NR == 1 { print $1 }' "${stage}/checksum")"
+  [[ "$expected" =~ ^[A-Fa-f0-9]{64}$ ]] || die "SHA-256 校验文件格式无效。"
+  actual="$(jdk_sha256 "$archive")" || die "无法计算下载文件的 SHA-256。"
+  expected="$(printf '%s' "$expected" | tr 'A-F' 'a-f')"
+  actual="$(printf '%s' "$actual" | tr 'A-F' 'a-f')"
+  [[ "$expected" == "$actual" ]] || die "JDK 归档文件的 SHA-256 校验失败。"
+
+  archive_root="$(jdk_archive_root "$archive" "$JDK_ARCHIVE_TYPE")" || die "JDK 归档目录结构不安全或无效。"
+  mkdir -p "${stage}/extract" || die "无法创建解压目录。"
+  if [[ "$JDK_ARCHIVE_TYPE" == zip ]]; then
+    unzip -q "$archive" -d "${stage}/extract" || die "解压 JDK ZIP 失败。"
+  else
+    tar -xzf "$archive" -C "${stage}/extract" || die "解压 JDK tar.gz 失败。"
+  fi
+  extracted="${stage}/extract/${archive_root}"
+  home="$(jdk_home_from_directory "$extracted")" || die "归档中没有 JDK 的 bin/java。"
+  binary="$(java_binary_in_home "$home")" || die "归档中没有 Java 可执行文件。"
+  binary_version="$(java_version_from_command "$binary")" || die "归档中的 Java 无法运行或版本未知。"
+  version="$(java_version_in_home "$home")" || die "无法读取 JDK 版本。"
+  installed_major="$(normalize_java_major "$binary_version")" || die "归档中的 JDK 版本无效。"
+  [[ "$installed_major" == "$requested" ]] || die "下载的 JDK 为 Java ${installed_major}，与请求的 ${requested} 不一致。"
+  [[ "${binary_version%%+*}" == "${version%%+*}" ]] || die "归档中的 Java 与 release 文件版本不一致。"
+
+  destination="${root}/temurin-${archive_root}"
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    existing_home="$(jdk_home_from_directory "$destination" || true)"
+    existing_version=""
+    if [[ -n "$existing_home" ]] && jdk_valid_home "$existing_home"; then
+      existing_version="$(java_version_in_home "$existing_home" || true)"
+    fi
+    if [[ -n "$existing_version" && "$existing_version" == "$version" ]]; then
+      log "已安装 Eclipse Temurin ${version}：$existing_home"
+      return 0
+    fi
+    die "目标目录已存在且不是同一完整版本，未覆盖：$destination"
+  fi
+  mv -n "$extracted" "$destination" || die "无法安装 JDK 到：$destination"
+  [[ ! -e "$extracted" ]] || die "安装目标目录同时出现，未覆盖：$destination"
+  home="$(jdk_home_from_directory "$destination")" || die "安装后的 JDK 路径无效。"
+  log "已安装 Eclipse Temurin ${version}：$home"
+}
+
+jdk_usage() {
+  cat <<EOF
+用法：
+  ${SCRIPT_NAME} jdk ls
+  ${SCRIPT_NAME} jdk ls-remote
+  ${SCRIPT_NAME} jdk install <LTS 主版本>
+
+JDK 目录：JDK_HOME；未设置时使用 HOME/.jdks。
+EOF
+}
+
+jdk_main() {
+  local action="${1-}"
+  case "$action" in
+    ls)
+      [[ $# -eq 1 ]] || die "jdk ls 不接受其他参数。"
+      jdk_ls
+      ;;
+    ls-remote)
+      [[ $# -eq 1 ]] || die "jdk ls-remote 不接受其他参数。"
+      jdk_remote_lts
+      ;;
+    install)
+      [[ $# -eq 2 ]] || die "用法：${SCRIPT_NAME} jdk install <LTS 主版本>"
+      jdk_install "$2"
+      ;;
+    -h|--help|help)
+      [[ $# -eq 1 ]] || die "jdk help 不接受其他参数。"
+      jdk_usage
+      ;;
+    *) jdk_usage >&2; die "未知 jdk 命令：${action:-空}" ;;
+  esac
+}
+
+if [[ "${1-}" == jdk ]]; then
+  shift
+  jdk_main "$@"
+  exit $?
+fi
 
 find_upward() {
   local start_dir
@@ -589,17 +961,6 @@ if (( ${#GRADLE_BUILD_ARGS[@]} == 0 )) && [[ -z "${PROJECT_ARRAY_SET[gradle_arg]
   GRADLE_BUILD_ARGS=(build -x test)
 fi
 
-normalize_java_major() {
-  local value="$1"
-  if [[ "$value" =~ ^1\.([0-9]+)([._+~-].*)?$ ]]; then
-    printf '%s' "${BASH_REMATCH[1]}"
-  elif [[ "$value" =~ ^([0-9]+)([._+~-].*)?$ ]]; then
-    printf '%s' "${BASH_REMATCH[1]}"
-  else
-    return 1
-  fi
-}
-
 major_from_expression() {
   local value="$1"
   [[ "$value" != *'$'* ]] || return 1
@@ -704,79 +1065,15 @@ detect_gradle_java_version() {
   return 1
 }
 
-java_binary_in_home() {
-  local bin="${1%/}/bin/java"
-  if [[ -f "$bin" ]]; then
-    printf '%s' "$bin"
-  elif [[ -f "${bin}.exe" ]]; then
-    printf '%s' "${bin}.exe"
-  else
-    return 1
-  fi
-}
-
-java_version_from_command() {
-  local output
-  output="$("$1" -version 2>&1)" || return 1
-  if [[ "$output" =~ \"([0-9][^\"]*)\" ]]; then
-    printf '%s' "${BASH_REMATCH[1]}"
-  elif [[ "$output" =~ version[[:space:]]+([0-9][^[:space:]]*) ]]; then
-    printf '%s' "${BASH_REMATCH[1]}"
-  else
-    return 1
-  fi
-}
-
-java_version_in_home() {
-  local home="$1" line binary
-  if [[ -f "${home%/}/release" ]]; then
-    while IFS= read -r line; do
-      line="${line%$'\r'}"
-      if [[ "$line" =~ ^JAVA_VERSION=\"?([^\"]+)\"?$ ]]; then
-        printf '%s' "${BASH_REMATCH[1]}"
-        return 0
-      fi
-    done <"${home%/}/release"
-  fi
-  binary="$(java_binary_in_home "$home")" || return 1
-  java_version_from_command "$binary"
-}
-
-version_is_newer() {
-  [[ -z "$2" || "$(printf '%s\n%s\n' "$2" "$1" | LC_ALL=C sort -V | awk 'END { print }')" == "$1" ]]
-}
-
-MATCHED_JDK=""
-AVAILABLE_JDKS=""
-find_jdk_in_root() {
-  local required_major="$1" root child version major best_version=""
-  MATCHED_JDK=""
-  AVAILABLE_JDKS=""
-  [[ -n "${JDK_HOME-}" ]] || return 1
-  root="$(to_bash_path "$JDK_HOME")"
-  [[ -d "$root" ]] || return 1
-  for child in "$root"/*; do
-    [[ -d "$child" ]] || continue
-    java_binary_in_home "$child" >/dev/null || continue
-    version="$(java_version_in_home "$child" || true)"
-    major="$(normalize_java_major "$version" || true)"
-    [[ -n "$major" ]] || continue
-    AVAILABLE_JDKS="${AVAILABLE_JDKS:+${AVAILABLE_JDKS}, }${version} (${child})"
-    [[ -z "$required_major" || "$major" == "$required_major" ]] || continue
-    if version_is_newer "$version" "$best_version"; then
-      best_version="$version"
-      MATCHED_JDK="$child"
-    fi
-  done
-  [[ -n "$MATCHED_JDK" ]]
-}
-
 JAVA_CMD=""
 JAVA_HOME_VALUE=""
 select_java_home() {
   local home binary
   home="$(to_bash_path "$1")"
   [[ -d "$home" ]] || return 1
+  if ! java_binary_in_home "$home" >/dev/null; then
+    home="$(jdk_home_from_directory "$home")" || return 1
+  fi
   binary="$(java_binary_in_home "$home")" || return 1
   "$binary" -version >/dev/null 2>&1 || return 1
   JAVA_HOME_VALUE="$(cd "$home" && pwd -P)"

@@ -87,12 +87,18 @@ jdev
 jdev init
 jdev init --global
 jdev --build-tool gradle --java-version 21
+jdev jdk ls
+jdev jdk ls-remote
+jdev jdk install 21
 ```
 
 Configuration is read from `$HOME/.jdev.conf`, then the project `.jdev.conf`;
 command line options take precedence. For a declared Java version, `jdev`
-searches the JDK installations directly under `JDK_HOME`, then checks
-`JAVA_HOME` and `PATH`. Gradle projects use `gradlew` when present, followed by
+searches the JDK installations directly under `JDK_HOME` (or `$HOME/.jdks`
+when unset), then checks `JAVA_HOME` and `PATH`. `jdev jdk ls` lists local JDKs;
+`ls-remote` lists Eclipse Temurin LTS versions; `install <major>` downloads the
+latest GA JDK for that LTS version, verifies its SHA-256 checksum, and keeps
+older patch versions. Gradle projects use `gradlew` when present, followed by
 `GRADLE_HOME` and `PATH`. Use `jdev --help` for all options.
 
 ### git

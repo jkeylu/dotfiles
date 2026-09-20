@@ -317,3 +317,348 @@ assert_absent "$MAVEN_PROJECT/target/.spring-boot-dev-run" 'run files are cleane
 
 printf '%d assertions, %d failures\n' "$TESTS" "$FAILURES"
 (( FAILURES == 0 ))
+
+# JDK 管理命令使用独立的临时环境，与项目运行测试共用本文件。
+run_jdk_tests() (
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+JDEV="${REPO_DIR}/scripts/tools/jdev"
+TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/jdev-jdk-test.XXXXXX")"
+TEST_HOME="${TEST_ROOT}/user home"
+FAKE_BIN="${TEST_ROOT}/bin"
+BASE_PATH="$PATH"
+EVENTS="${TEST_ROOT}/events"
+OUTPUT_FILE="${TEST_ROOT}/output"
+ASSERTIONS=0
+FAILURES=0
+JDEV_PID=""
+
+cleanup() {
+  if [[ -n "$JDEV_PID" ]] && kill -0 "$JDEV_PID" 2>/dev/null; then
+    kill -TERM "$JDEV_PID" 2>/dev/null || true
+    wait "$JDEV_PID" 2>/dev/null || true
+  fi
+  rm -rf -- "$TEST_ROOT"
+}
+trap cleanup EXIT
+
+pass() { ((ASSERTIONS += 1)); }
+fail() {
+  ((ASSERTIONS += 1, FAILURES += 1))
+  printf 'FAIL: %s\n' "$1" >&2
+  [[ ! -f "$OUTPUT_FILE" ]] || cat "$OUTPUT_FILE" >&2
+}
+assert_status() { [[ "$STATUS" -eq "$1" ]] && pass || fail "$2 (exit $STATUS)"; }
+assert_contains() { [[ "$OUTPUT" == *"$1"* ]] && pass || fail "$2 (missing '$1')"; }
+assert_file() { [[ -f "$1" ]] && pass || fail "$2"; }
+assert_absent() { [[ ! -e "$1" ]] && pass || fail "$2"; }
+assert_requested() { grep -Fq -- "$1" "$MOCK_CURL_LOG" && pass || fail "$2 (missing '$1' in API requests)"; }
+assert_no_staging() {
+  local staged
+  for staged in "$1"/.jdev-install.*; do
+    [[ ! -e "$staged" ]] || { fail "$2"; return; }
+  done
+  pass
+}
+
+run_jdev() {
+  set +e
+  OUTPUT="$(cd "$TEST_ROOT" && bash "$JDEV" "$@" 2>&1)"
+  STATUS=$?
+  set -e
+  printf '%s\n' "$OUTPUT" >"$OUTPUT_FILE"
+}
+
+make_java_home() {
+  local home="$1" version="$2" suffix="${3-}"
+  mkdir -p "$home/bin"
+  printf 'JAVA_VERSION="%s"\n' "$version" >"$home/release"
+  cat >"$home/bin/java${suffix}" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1-}" == -version ]]; then
+  printf 'openjdk version "%s"\n' "$(sed -n 's/^JAVA_VERSION="\(.*\)"$/\1/p' "$(dirname "$0")/../release")" >&2
+  exit 0
+fi
+printf '%s\n' "${JAVA_HOME-}" >>"$TEST_JAVA_RUN_LOG"
+trap 'exit 0' TERM INT
+while :; do sleep 0.1; done
+EOF
+  chmod +x "$home/bin/java${suffix}"
+}
+
+make_zip() {
+  local output="$1" payload="$2" top="$3"
+  (cd "$payload" && perl -MIO::Compress::Zip -e '
+    my ($output, @names) = @ARGV;
+    my $first = shift @names;
+    my $zip = IO::Compress::Zip->new($output, Name => $first) or die $IO::Compress::Zip::ZipError;
+    open my $input, "<", $first or die $!;
+    binmode $input; local $/; $zip->print(<$input>); close $input;
+    for my $name (@names) {
+      $zip->newStream(Name => $name) or die $IO::Compress::Zip::ZipError;
+      open my $next, "<", $name or die $!;
+      binmode $next; $zip->print(<$next>); close $next;
+    }
+    $zip->close() or die $IO::Compress::Zip::ZipError;
+  ' "$output" "$top/release" "$top/bin/java.exe")
+}
+
+make_archive() {
+  local type="$1" version="$2" top="$3" output="$4"
+  local payload="${TEST_ROOT}/payload-${version}-${type}"
+  if [[ "$type" == zip ]]; then
+    make_java_home "$payload/$top" "$version" .exe
+    make_zip "$output" "$payload" "$top"
+  elif [[ "$type" == mac ]]; then
+    make_java_home "$payload/$top/Contents/Home" "$version"
+    tar -czf "$output" -C "$payload" "$top"
+  else
+    make_java_home "$payload/$top" "$version"
+    tar -czf "$output" -C "$payload" "$top"
+  fi
+}
+
+mkdir -p "$TEST_HOME" "$FAKE_BIN"
+cat >"$FAKE_BIN/uname" <<'EOF'
+#!/usr/bin/env bash
+case "${1-}" in
+  -s)
+    case "$MOCK_OS" in
+      windows) printf 'MINGW64_NT-10.0\n' ;;
+      linux) printf 'Linux\n' ;;
+      mac) printf 'Darwin\n' ;;
+      *) printf 'Unknown\n' ;;
+    esac
+    ;;
+  -m) printf '%s\n' "$MOCK_ARCH" ;;
+  *) /usr/bin/uname "$@" ;;
+esac
+EOF
+cat >"$FAKE_BIN/curl" <<'EOF'
+#!/usr/bin/env bash
+output=""
+url=""
+write_out=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output) output="$2"; shift 2 ;;
+    --write-out) write_out="$2"; shift 2 ;;
+    https://*) url="$1"; shift ;;
+    *) shift ;;
+  esac
+done
+printf '%s\n' "$url" >>"$MOCK_CURL_LOG"
+case "$url" in
+  */info/available_releases)
+    [[ "${MOCK_LIST_FAIL-0}" != 1 ]] || exit 22
+    printf '%s\n' "${MOCK_LTS_JSON-}"
+    ;;
+  */binary/latest/*)
+    [[ "${MOCK_HTTP_404-0}" != 1 ]] || exit 22
+    if [[ "${MOCK_INTERRUPT-0}" == 1 ]]; then
+      kill -TERM "$PPID"
+      sleep 0.1
+      exit 1
+    fi
+    cp "$MOCK_ARCHIVE" "$output"
+    [[ -z "$write_out" ]] || printf 'https://mock.example/releases/%s' "$MOCK_ARCHIVE_NAME"
+    ;;
+  *.sha256.txt)
+    if command -v sha256sum >/dev/null 2>&1; then
+      hash="$(sha256sum "$MOCK_ARCHIVE" | awk '{print $1}')"
+    else
+      hash="$(shasum -a 256 "$MOCK_ARCHIVE" | awk '{print $1}')"
+    fi
+    [[ "${MOCK_BAD_HASH-0}" != 1 ]] || hash="$(printf '%064d' 0)"
+    printf '%s  %s\n' "$hash" "$MOCK_ARCHIVE_NAME" >"$output"
+    ;;
+  *) exit 22 ;;
+esac
+EOF
+chmod +x "$FAKE_BIN/uname" "$FAKE_BIN/curl"
+export PATH="$FAKE_BIN:$BASE_PATH" HOME="$TEST_HOME"
+export MOCK_OS=windows MOCK_ARCH=x86_64 MOCK_LTS_JSON='{"available_lts_releases":[8,11,17,21,25]}'
+export MOCK_CURL_LOG="${TEST_ROOT}/curl.log" TEST_JAVA_RUN_LOG="$EVENTS"
+unset JDK_HOME JAVA_HOME
+: >"$MOCK_CURL_LOG"
+: >"$EVENTS"
+
+bash -n "$JDEV" && pass || fail 'JDK command syntax'
+run_jdev jdk ls
+assert_status 0 'missing default JDK directory is an empty list'
+[[ -z "$OUTPUT" ]] && pass || fail 'empty JDK directory produces no rows'
+
+make_java_home "$TEST_HOME/.jdks/custom-17" 17.0.1
+make_java_home "$TEST_HOME/.jdks/custom-21/Contents/Home" 21.0.2
+make_java_home "$TEST_HOME/.jdks/mismatched" 17.0.1
+printf '#!/usr/bin/env bash\nprintf '\''openjdk version "21.0.1"\\n'\'' >&2\n' >"$TEST_HOME/.jdks/mismatched/bin/java"
+chmod +x "$TEST_HOME/.jdks/mismatched/bin/java"
+mkdir -p "$TEST_HOME/.jdks/invalid"
+run_jdev jdk ls
+assert_status 0 'local JDK listing succeeds'
+assert_contains $'21.0.2\t' 'macOS JDK home is listed'
+assert_contains "$TEST_HOME/.jdks/custom-21/Contents/Home" 'macOS JAVA_HOME points to Contents/Home'
+assert_contains $'17.0.1\t' 'other installed JDK is listed'
+[[ "${OUTPUT%%$'\n'*}" == 21.0.2* ]] && pass || fail 'local JDKs are ordered newest first'
+[[ "$OUTPUT" != *invalid* ]] && pass || fail 'invalid child directory is skipped'
+[[ "$OUTPUT" != *mismatched* ]] && pass || fail 'release and binary version mismatch is skipped'
+
+export JDK_HOME="${TEST_ROOT}/custom root"
+mkdir -p "$JDK_HOME"
+make_java_home "$JDK_HOME/custom-8" 1.8.0_502
+run_jdev jdk ls
+assert_contains $'1.8.0_502\t' 'JDK_HOME overrides the default root'
+[[ "$OUTPUT" != *21.0.2* ]] && pass || fail 'default root is not mixed with JDK_HOME'
+
+run_jdev jdk ls-remote
+assert_status 0 'remote LTS list succeeds'
+[[ "$OUTPUT" == $'8\n11\n17\n21\n25' ]] && pass || fail 'remote list uses LTS field only'
+export MOCK_LTS_JSON='{"available_releases":[17],"wrong_field":[21]}'
+run_jdev jdk ls-remote
+[[ "$STATUS" -ne 0 ]] && pass || fail 'malformed remote list fails'
+assert_contains '格式无效' 'malformed remote list explains failure'
+export MOCK_LTS_JSON='{"available_lts_releases":[8,11,17,21,25]}' MOCK_LIST_FAIL=1
+run_jdev jdk ls-remote
+[[ "$STATUS" -ne 0 ]] && pass || fail 'remote network failure fails'
+unset MOCK_LIST_FAIL
+
+run_jdev jdk install 17.0.9
+[[ "$STATUS" -ne 0 ]] && pass || fail 'patch version is rejected'
+run_jdev jdk install 22
+[[ "$STATUS" -ne 0 ]] && pass || fail 'non-LTS major is rejected'
+
+ZIP_17="${TEST_ROOT}/jdk-17.zip"
+make_archive zip 17.0.9 'jdk-17.0.9+9' "$ZIP_17"
+export MOCK_ARCHIVE="$ZIP_17" MOCK_ARCHIVE_NAME='jdk-17.zip'
+run_jdev jdk install 17
+assert_status 0 'Windows ZIP installs'
+assert_requested '/windows/x64/jdk/' 'Windows x64 artifact is selected'
+DEST_17="$JDK_HOME/temurin-jdk-17.0.9+9"
+assert_file "$DEST_17/bin/java.exe" 'Windows JDK is installed under versioned directory'
+assert_no_staging "$JDK_HOME" 'successful install cleans staging directory'
+run_jdev jdk install 17
+assert_status 0 'repeated install succeeds'
+assert_contains '已安装' 'repeated install is a no-op'
+
+ZIP_17_NEW="${TEST_ROOT}/jdk-17-new.zip"
+make_archive zip 17.0.10 'jdk-17.0.10+1' "$ZIP_17_NEW"
+export MOCK_ARCHIVE="$ZIP_17_NEW" MOCK_ARCHIVE_NAME='jdk-17-new.zip'
+run_jdev jdk install 17
+assert_status 0 'new patch installs beside old patch'
+assert_file "$DEST_17/bin/java.exe" 'old patch remains installed'
+assert_file "$JDK_HOME/temurin-jdk-17.0.10+1/bin/java.exe" 'new patch is installed'
+
+ZIP_17_BAD="${TEST_ROOT}/jdk-17-bad.zip"
+make_archive zip 17.0.11 'jdk-17.0.11+1' "$ZIP_17_BAD"
+export MOCK_ARCHIVE="$ZIP_17_BAD" MOCK_ARCHIVE_NAME='jdk-17-bad.zip' MOCK_BAD_HASH=1
+run_jdev jdk install 17
+[[ "$STATUS" -ne 0 ]] && pass || fail 'checksum mismatch fails'
+assert_contains 'SHA-256 校验失败' 'checksum mismatch is explained'
+assert_absent "$JDK_HOME/temurin-jdk-17.0.11+1" 'checksum mismatch leaves no installation'
+assert_no_staging "$JDK_HOME" 'checksum failure cleans staging directory'
+unset MOCK_BAD_HASH
+export MOCK_INTERRUPT=1
+run_jdev jdk install 17
+[[ "$STATUS" -ne 0 ]] && pass || fail 'interrupted install fails'
+assert_no_staging "$JDK_HOME" 'interruption cleans staging directory'
+unset MOCK_INTERRUPT
+
+BAD_ZIP="${TEST_ROOT}/traversal.zip"
+perl -MIO::Compress::Zip -e '
+  my $zip = IO::Compress::Zip->new($ARGV[0], Name => "../escape/release") or die $IO::Compress::Zip::ZipError;
+  $zip->print("JAVA_VERSION=\"17.0.11\"\n");
+  $zip->close() or die $IO::Compress::Zip::ZipError;
+' "$BAD_ZIP"
+export MOCK_ARCHIVE="$BAD_ZIP" MOCK_ARCHIVE_NAME='traversal.zip'
+run_jdev jdk install 17
+[[ "$STATUS" -ne 0 ]] && pass || fail 'traversal archive is rejected'
+assert_contains '目录结构不安全' 'traversal archive explains rejection'
+assert_absent "$TEST_ROOT/escape" 'traversal archive cannot escape staging'
+assert_no_staging "$JDK_HOME" 'invalid archive cleans staging directory'
+
+export MOCK_ARCHIVE="$ZIP_17_BAD" MOCK_ARCHIVE_NAME='jdk-17-bad.zip'
+mkdir -p "$JDK_HOME/temurin-jdk-17.0.11+1"
+printf 'keep\n' >"$JDK_HOME/temurin-jdk-17.0.11+1/marker"
+run_jdev jdk install 17
+[[ "$STATUS" -ne 0 ]] && pass || fail 'invalid existing destination is not overwritten'
+assert_file "$JDK_HOME/temurin-jdk-17.0.11+1/marker" 'existing destination remains intact'
+assert_no_staging "$JDK_HOME" 'collision cleans staging directory'
+
+export MOCK_HTTP_404=1
+run_jdev jdk install 17
+[[ "$STATUS" -ne 0 ]] && pass || fail 'unavailable platform package fails'
+assert_contains '当前平台可能没有' 'missing package error is clear'
+assert_no_staging "$JDK_HOME" 'download failure cleans staging directory'
+unset MOCK_HTTP_404
+
+LINUX_TAR="${TEST_ROOT}/jdk-21.tar.gz"
+make_archive linux 21.0.4 'jdk-21.0.4+1' "$LINUX_TAR"
+export MOCK_OS=linux MOCK_ARCH=aarch64 JDK_HOME="${TEST_ROOT}/linux installs"
+export MOCK_ARCHIVE="$LINUX_TAR" MOCK_ARCHIVE_NAME='jdk-21.tar.gz'
+run_jdev jdk install 21
+assert_status 0 'Linux tar.gz installs'
+assert_requested '/linux/aarch64/jdk/' 'Linux ARM64 artifact is selected'
+assert_file "$JDK_HOME/temurin-jdk-21.0.4+1/bin/java" 'Linux JDK is installed'
+
+MAC_TAR="${TEST_ROOT}/jdk-17-mac.tar.gz"
+make_archive mac 17.0.12 'jdk-17.0.12+1' "$MAC_TAR"
+export MOCK_OS=mac MOCK_ARCH=arm64 JDK_HOME="${TEST_ROOT}/mac installs"
+export MOCK_ARCHIVE="$MAC_TAR" MOCK_ARCHIVE_NAME='jdk-17-mac.tar.gz'
+run_jdev jdk install 17
+assert_status 0 'macOS tar.gz installs'
+assert_requested '/mac/aarch64/jdk/' 'macOS ARM64 artifact is selected'
+assert_file "$JDK_HOME/temurin-jdk-17.0.12+1/Contents/Home/bin/java" 'macOS JDK layout is retained'
+run_jdev jdk ls
+assert_contains "$JDK_HOME/temurin-jdk-17.0.12+1/Contents/Home" 'macOS local list returns actual JAVA_HOME'
+
+unset JDK_HOME
+export MOCK_OS=windows MOCK_ARCH=x86_64 MOCK_ARCHIVE="$ZIP_17" MOCK_ARCHIVE_NAME='jdk-17.zip'
+run_jdev jdk install 17
+assert_status 0 'default HOME/.jdks installation works'
+cat >"$FAKE_BIN/mvn" <<'EOF'
+#!/usr/bin/env bash
+mkdir -p target
+printf 'test-jar' >target/app.jar
+EOF
+chmod +x "$FAKE_BIN/mvn"
+PROJECT="${TEST_ROOT}/spring app"
+mkdir -p "$PROJECT/src/main/java"
+printf '<project><properties><java.version>17</java.version></properties><dependency>spring-boot</dependency></project>\n' >"$PROJECT/pom.xml"
+: >"$EVENTS"
+(cd "$PROJECT" && exec bash "$JDEV" --poll 0.1 --delay 0) >"$OUTPUT_FILE" 2>&1 &
+JDEV_PID=$!
+for ((i = 0; i < 100; i++)); do
+  [[ -s "$EVENTS" ]] && break
+  sleep 0.1
+done
+if [[ -s "$EVENTS" ]]; then
+  pass
+  [[ "$(cat "$EVENTS")" == "$TEST_HOME/.jdks/temurin-jdk-17.0.9+9"* ]] && pass || fail 'project run selects installed default-root JDK'
+else
+  fail 'project run starts with installed JDK'
+fi
+kill -TERM "$JDEV_PID" 2>/dev/null || true
+wait "$JDEV_PID" 2>/dev/null || true
+JDEV_PID=""
+
+export JDK_HOME="${TEST_ROOT}/mac installs"
+: >"$EVENTS"
+(cd "$PROJECT" && exec bash "$JDEV" --poll 0.1 --delay 0) >"$OUTPUT_FILE" 2>&1 &
+JDEV_PID=$!
+for ((i = 0; i < 100; i++)); do
+  [[ -s "$EVENTS" ]] && break
+  sleep 0.1
+done
+if [[ -s "$EVENTS" ]]; then
+  [[ "$(cat "$EVENTS")" == "$JDK_HOME/temurin-jdk-17.0.12+1/Contents/Home"* ]] && pass || fail 'project run uses installed macOS JAVA_HOME'
+else
+  fail 'project run starts with installed macOS JDK'
+fi
+kill -TERM "$JDEV_PID" 2>/dev/null || true
+wait "$JDEV_PID" 2>/dev/null || true
+JDEV_PID=""
+
+printf '%d assertions, %d failures\n' "$ASSERTIONS" "$FAILURES"
+(( FAILURES == 0 ))
+)
+
+run_jdk_tests
