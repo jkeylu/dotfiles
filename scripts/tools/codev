@@ -5,11 +5,11 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage: codev create <name>
-       codev refresh
+       codev refresh-repos
        codev --help
 
 Create a workspace directory with links to selected Git applications.
-Run refresh after adding, removing, or moving applications.
+Run refresh-repos after adding, removing, or moving applications.
 
 Environment:
   CODEV_CODE_DIR       Directory to search for applications (required)
@@ -31,8 +31,8 @@ is_windows() {
 
 invocation_dir="$(pwd -P)"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-scan_file=''
 index_temp=''
+indexed_count=0
 destination=''
 created_destination=0
 created_links=()
@@ -67,9 +67,6 @@ remove_created_link() {
 
 cleanup() {
   local status=$? i
-  if [[ -n "$scan_file" ]]; then
-    rm -f -- "$scan_file" || true
-  fi
   if [[ -n "$index_temp" ]]; then
     rm -f -- "$index_temp" || true
   fi
@@ -117,38 +114,51 @@ confirm_append() {
   done
 }
 
+scan_repository_dir() {
+  local dir=$1 depth=$2 root=$3 relative child
+
+  [[ ! -f "$dir/.codevignore" ]] || return 0
+  [[ -r "$dir" && -x "$dir" ]] || die "cannot scan directory: $dir"
+
+  if [[ -d "$dir/.git" && ! -L "$dir/.git" ]]; then
+    if [[ "$dir" == "$root" ]]; then
+      relative=.
+    elif [[ "$root" == / ]]; then
+      relative=${dir#/}
+    else
+      relative=${dir#"$root"/}
+    fi
+    [[ "$relative" != *$'\n'* && "$relative" != *$'\r'* ]] ||
+      die "application path cannot be stored in the index: $relative"
+    printf '%s\n' "$relative" >>"$index_temp" || die "cannot write index: $index_temp"
+    ((indexed_count += 1))
+  fi
+
+  # The code root is depth 0; application directories may be at depths 0-3.
+  ((depth < 3)) || return 0
+  for child in "${dir%/}"/*/; do
+    child=${child%/}
+    [[ ! -L "$child" && "${child##*/}" != .git ]] || continue
+    scan_repository_dir "$child" "$((depth + 1))" "$root"
+  done
+}
+
 refresh_index() {
-  local code_dir index_file marker app relative count=0
+  local code_dir index_file
 
   code_dir="$(resolve_code_dir)"
   index_file="$code_dir/.codev-repos"
   [[ ! -d "$index_file" ]] || die "index path is a directory: $index_file"
   index_temp="$(mktemp "$code_dir/.codev-repos.tmp.XXXXXX")" ||
     die "cannot create index in: $code_dir"
-  scan_file="$(mktemp)" || die 'could not create a temporary file.'
-
-  find "$code_dir" -type d -name .git -prune -print0 >"$scan_file" ||
-    die "could not search code directory: $code_dir"
-  while IFS= read -r -d '' marker; do
-    app=${marker%/.git}
-    [[ -n "$app" ]] || app=/
-    if [[ "$app" == "$code_dir" ]]; then
-      relative=.
-    elif [[ "$code_dir" == / ]]; then
-      relative=${app#/}
-    else
-      relative=${app#"$code_dir"/}
-    fi
-    [[ "$relative" != *$'\n'* && "$relative" != *$'\r'* ]] ||
-      die "application path cannot be stored in the index: $relative"
-    printf '%s\n' "$relative" >>"$index_temp" || die "cannot write index: $index_temp"
-    ((count += 1))
-  done <"$scan_file"
+  indexed_count=0
+  shopt -s nullglob dotglob
+  scan_repository_dir "$code_dir" 0 "$code_dir"
 
   [[ ! -d "$index_file" ]] || die "index path became a directory: $index_file"
   mv -f -- "$index_temp" "$index_file" || die "cannot replace index: $index_file"
   index_temp=''
-  printf 'Indexed %d applications: %s\n' "$count" "$index_file"
+  printf 'Indexed %d applications: %s\n' "$indexed_count" "$index_file"
 }
 
 create_workspace() {
@@ -165,7 +175,7 @@ create_workspace() {
 
   index_file="$code_dir/.codev-repos"
   [[ -f "$index_file" && -r "$index_file" ]] ||
-    die "repository index is missing or unreadable: $index_file; run 'codev refresh' first."
+    die "repository index is missing or unreadable: $index_file; run 'codev refresh-repos' first."
   while IFS= read -r relative || [[ -n "$relative" ]]; do
     case "$relative" in
       .) app=$code_dir ;;
@@ -179,7 +189,7 @@ create_workspace() {
     labels+=("$relative")
     applications+=("$app")
   done <"$index_file"
-  [[ ${#labels[@]} -gt 0 ]] || die "no Git applications in index; run 'codev refresh' after adding repositories."
+  [[ ${#labels[@]} -gt 0 ]] || die "no Git applications in index; run 'codev refresh-repos' after adding repositories."
 
   if selection="$(printf '%s\n' "${labels[@]}" | "$script_dir/picker" --multi --prompt 'Applications')"; then
     :
@@ -201,7 +211,7 @@ create_workspace() {
     done
     ((found)) || die "picker returned an unknown application: $label"
     [[ -d "$source" && -d "$source/.git" ]] ||
-      die "application disappeared: $source; run 'codev refresh'."
+      die "application disappeared: $source; run 'codev refresh-repos'."
     source="$(cd -P -- "$source" && pwd -P)" || die "cannot enter application: $source"
     [[ "$code_dir" == / || "$source" == "$code_dir" || "$source" == "$code_dir/"* ]] ||
       die "indexed application is outside code directory: $source"
@@ -257,7 +267,7 @@ case "${1:-}" in
     [[ $# -eq 2 ]] || { usage >&2; exit 2; }
     create_workspace "$2"
     ;;
-  refresh)
+  refresh-repos)
     [[ $# -eq 1 ]] || { usage >&2; exit 2; }
     refresh_index
     ;;
