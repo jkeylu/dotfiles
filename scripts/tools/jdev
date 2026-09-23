@@ -61,13 +61,18 @@ usage() {
 用法：
   ${SCRIPT_NAME} [选项] [-- 应用参数]
   ${SCRIPT_NAME} init [--project-dir <目录> | --global] [--force]
-  ${SCRIPT_NAME} jdk <ls|ls-remote|install> [版本]
+  ${SCRIPT_NAME} jdk <ls|ls-remote>
+  ${SCRIPT_NAME} jdk install <LTS 主版本> [--source tsinghua|adoptium] [--no-verify-sha256]
 
 命令：
   init                       生成配置模板
   jdk ls                     列出本地 JDK
   jdk ls-remote              列出远程 LTS 主版本
   jdk install <版本>          安装最新的 Temurin LTS 补丁版本
+
+JDK 安装选项：
+  --source <源>             下载源：tsinghua（默认）或 adoptium
+  --no-verify-sha256        跳过 SHA-256 校验
 
 选项：
   --project-dir <目录>       Spring Boot 项目目录
@@ -115,6 +120,7 @@ usage() {
   ${SCRIPT_NAME} init --global
   ${SCRIPT_NAME} jdk ls-remote
   ${SCRIPT_NAME} jdk install 21
+  ${SCRIPT_NAME} jdk install 8 --source adoptium
   ${SCRIPT_NAME}
   ${SCRIPT_NAME} --delay 5 --profile dev
   ${SCRIPT_NAME} --restart-mode ask
@@ -370,7 +376,7 @@ jdk_platform() {
   esac
   case "$machine" in
     x86_64|amd64) JDK_API_ARCH=x64 ;;
-    i386|i486|i586|i686|x86) JDK_API_ARCH=x86 ;;
+    i386|i486|i586|i686|x86) JDK_API_ARCH=x32 ;;
     aarch64|arm64) JDK_API_ARCH=aarch64 ;;
     armv7l|armv6l) JDK_API_ARCH=arm ;;
     ppc64le|s390x|riscv64) JDK_API_ARCH="$machine" ;;
@@ -385,6 +391,38 @@ jdk_sha256() {
     shasum -a 256 "$1" | awk '{ print $1 }'
   else
     die "校验下载文件需要 sha256sum 或 shasum。"
+  fi
+}
+
+jdk_latest_asset() {
+  local requested="$1" download_source="$2" verify_sha256="$3"
+  local response package pattern name_pattern checksum_pattern link_pattern
+  local metadata_url="https://api.adoptium.net/v3/assets/latest/${requested}/hotspot?architecture=${JDK_API_ARCH}&image_type=jdk&os=${JDK_API_OS}&vendor=eclipse"
+  response="$(curl --fail --silent --show-error --location --connect-timeout 15 --retry 2 "$metadata_url")" || die "无法读取 Adoptium 发布元数据。"
+  pattern='"package"[[:space:]]*:[[:space:]]*\{([^}]*)\}'
+  [[ "$response" =~ $pattern ]] || die "Adoptium 发布元数据中没有 JDK 归档信息。"
+  package="${BASH_REMATCH[1]}"
+  name_pattern='"name"[[:space:]]*:[[:space:]]*"([^"]+)"'
+  checksum_pattern='"checksum"[[:space:]]*:[[:space:]]*"([A-Fa-f0-9]{64})"'
+  link_pattern='"link"[[:space:]]*:[[:space:]]*"([^"]+)"'
+  [[ "$package" =~ $name_pattern ]] || die "Adoptium 发布元数据缺少归档文件名。"
+  JDK_ASSET_NAME="${BASH_REMATCH[1]}"
+  [[ "$JDK_ASSET_NAME" =~ ^[A-Za-z0-9._+-]+$ &&
+     "$JDK_ASSET_NAME" == OpenJDK${requested}U-jdk_${JDK_API_ARCH}_${JDK_API_OS}_hotspot_*."$JDK_ARCHIVE_TYPE" ]] ||
+    die "Adoptium 返回的 JDK 文件名与请求的平台或版本不符。"
+  JDK_ASSET_SHA256=""
+  if [[ "$package" =~ $checksum_pattern ]]; then
+    JDK_ASSET_SHA256="${BASH_REMATCH[1]}"
+  elif (( verify_sha256 )); then
+    die "Adoptium 发布元数据缺少有效的 SHA-256。"
+  fi
+  JDK_ASSET_LINK=""
+  if [[ "$package" =~ $link_pattern ]]; then
+    JDK_ASSET_LINK="${BASH_REMATCH[1]}"
+  fi
+  if [[ "$download_source" == adoptium ]]; then
+    [[ "$JDK_ASSET_LINK" == https://* && "${JDK_ASSET_LINK%%\?*}" == */"$JDK_ASSET_NAME" ]] ||
+      die "Adoptium 发布元数据缺少有效的官方归档地址。"
   fi
 }
 
@@ -425,21 +463,24 @@ jdk_cleanup_install() {
 }
 
 jdk_install() {
-  local requested="$1" released version root stage archive api final_url checksum_url
+  local requested="$1" download_source="$2" verify_sha256="$3"
+  local released version root stage archive download_url
   local expected actual archive_root extracted home binary binary_version installed_major destination existing_home existing_version
   [[ "$requested" =~ ^[1-9][0-9]*$ ]] || die "请指定 LTS 主版本号，例如：jdev jdk install 17。"
   released="$(jdk_remote_lts)" || return 1
   [[ $'\n'"$released"$'\n' == *$'\n'"$requested"$'\n'* ]] || die "Java ${requested} 不在远程 LTS 列表中。"
   jdk_platform
-  command -v awk >/dev/null 2>&1 || die "安装 JDK 需要 awk。"
   command -v mktemp >/dev/null 2>&1 || die "安装 JDK 需要 mktemp。"
   if [[ "$JDK_ARCHIVE_TYPE" == zip ]]; then
     command -v unzip >/dev/null 2>&1 || die "Windows JDK 安装需要 unzip。"
   else
     command -v tar >/dev/null 2>&1 || die "JDK 安装需要 tar。"
   fi
-  if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
-    die "校验下载文件需要 sha256sum 或 shasum。"
+  if (( verify_sha256 )); then
+    command -v awk >/dev/null 2>&1 || die "校验下载文件需要 awk。"
+    if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+      die "校验下载文件需要 sha256sum 或 shasum。"
+    fi
   fi
   root="$(jdk_root)" || die "未设置 HOME 或 JDK_HOME。"
   mkdir -p "$root" || die "无法创建 JDK 目录：$root"
@@ -450,21 +491,30 @@ jdk_install() {
   trap jdk_cleanup_install EXIT
   trap 'exit 130' INT TERM
 
-  api="https://api.adoptium.net/v3/binary/latest/${requested}/ga/${JDK_API_OS}/${JDK_API_ARCH}/jdk/hotspot/normal/eclipse"
+  jdk_latest_asset "$requested" "$download_source" "$verify_sha256"
+  # 原下载源：api="https://api.adoptium.net/v3/binary/latest/${requested}/ga/${JDK_API_OS}/${JDK_API_ARCH}/jdk/hotspot/normal/eclipse"
+  if [[ "$download_source" == tsinghua ]]; then
+    download_url="https://mirrors.tuna.tsinghua.edu.cn/Adoptium/${requested}/jdk/${JDK_API_ARCH}/${JDK_API_OS}/${JDK_ASSET_NAME}"
+  else
+    download_url="$JDK_ASSET_LINK"
+  fi
   archive="${stage}/jdk.${JDK_ARCHIVE_TYPE}"
-  log "下载 Eclipse Temurin ${requested} (${JDK_API_OS}/${JDK_API_ARCH})。"
-  final_url="$(curl --fail --silent --show-error --location --connect-timeout 15 --retry 2 \
-    --output "$archive" --write-out '%{url_effective}' "$api")" || die "下载失败；当前平台可能没有 Java ${requested} 的 JDK 包。"
-  [[ "$final_url" == https://* ]] || die "下载地址不是 HTTPS。"
-  checksum_url="${final_url%%\?*}.sha256.txt"
-  curl --fail --silent --show-error --location --connect-timeout 15 --retry 2 \
-    --output "${stage}/checksum" "$checksum_url" || die "无法下载 SHA-256 校验文件。"
-  expected="$(awk 'NR == 1 { print $1 }' "${stage}/checksum")"
-  [[ "$expected" =~ ^[A-Fa-f0-9]{64}$ ]] || die "SHA-256 校验文件格式无效。"
-  actual="$(jdk_sha256 "$archive")" || die "无法计算下载文件的 SHA-256。"
-  expected="$(printf '%s' "$expected" | tr 'A-F' 'a-f')"
-  actual="$(printf '%s' "$actual" | tr 'A-F' 'a-f')"
-  [[ "$expected" == "$actual" ]] || die "JDK 归档文件的 SHA-256 校验失败。"
+  log "下载 Eclipse Temurin ${requested} (${JDK_API_OS}/${JDK_API_ARCH}，${download_source})。"
+  if ! curl --fail --show-error --location --progress-bar --connect-timeout 15 --retry 2 \
+    --output "$archive" "$download_url"; then
+    if [[ "$download_source" == tsinghua ]]; then
+      die "清华镜像下载失败；当前平台可能没有 Java ${requested} 的 JDK 包，或镜像尚未同步。"
+    fi
+    die "Adoptium 下载失败；当前平台可能没有 Java ${requested} 的 JDK 包。"
+  fi
+  if (( verify_sha256 )); then
+    expected="$(printf '%s' "$JDK_ASSET_SHA256" | tr 'A-F' 'a-f')"
+    actual="$(jdk_sha256 "$archive")" || die "无法计算下载文件的 SHA-256。"
+    actual="$(printf '%s' "$actual" | tr 'A-F' 'a-f')"
+    [[ "$expected" == "$actual" ]] || die "JDK 归档文件的 SHA-256 校验失败。"
+  else
+    log "已跳过 SHA-256 校验。"
+  fi
 
   archive_root="$(jdk_archive_root "$archive" "$JDK_ARCHIVE_TYPE")" || die "JDK 归档目录结构不安全或无效。"
   mkdir -p "${stage}/extract" || die "无法创建解压目录。"
@@ -506,14 +556,15 @@ jdk_usage() {
 用法：
   ${SCRIPT_NAME} jdk ls
   ${SCRIPT_NAME} jdk ls-remote
-  ${SCRIPT_NAME} jdk install <LTS 主版本>
+  ${SCRIPT_NAME} jdk install <LTS 主版本> [--source tsinghua|adoptium] [--no-verify-sha256]
 
 JDK 目录：JDK_HOME；未设置时使用 HOME/.jdks。
+默认从清华镜像下载；Adoptium 发布元数据用于识别最新版本和 SHA-256。
 EOF
 }
 
 jdk_main() {
-  local action="${1-}"
+  local action="${1-}" requested="" download_source=tsinghua verify_sha256=1
   case "$action" in
     ls)
       [[ $# -eq 1 ]] || die "jdk ls 不接受其他参数。"
@@ -524,8 +575,31 @@ jdk_main() {
       jdk_remote_lts
       ;;
     install)
-      [[ $# -eq 2 ]] || die "用法：${SCRIPT_NAME} jdk install <LTS 主版本>"
-      jdk_install "$2"
+      shift
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --source)
+            need_value "$1" "${2-}"
+            download_source="$2"
+            shift 2
+            ;;
+          --source=*) download_source="${1#*=}"; shift ;;
+          --no-verify-sha256) verify_sha256=0; shift ;;
+          -h|--help) jdk_usage; return 0 ;;
+          -*) die "未知 jdk install 选项：$1" ;;
+          *)
+            [[ -z "$requested" ]] || die "jdk install 只接受一个 LTS 主版本。"
+            requested="$1"
+            shift
+            ;;
+        esac
+      done
+      [[ -n "$requested" ]] || die "用法：${SCRIPT_NAME} jdk install <LTS 主版本>"
+      case "$download_source" in
+        tsinghua|adoptium) ;;
+        *) die "下载源必须是 tsinghua 或 adoptium。" ;;
+      esac
+      jdk_install "$requested" "$download_source" "$verify_sha256"
       ;;
     -h|--help|help)
       [[ $# -eq 1 ]] || die "jdk help 不接受其他参数。"

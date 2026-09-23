@@ -352,6 +352,7 @@ assert_contains() { [[ "$OUTPUT" == *"$1"* ]] && pass || fail "$2 (missing '$1')
 assert_file() { [[ -f "$1" ]] && pass || fail "$2"; }
 assert_absent() { [[ ! -e "$1" ]] && pass || fail "$2"; }
 assert_requested() { grep -Fq -- "$1" "$MOCK_CURL_LOG" && pass || fail "$2 (missing '$1' in API requests)"; }
+assert_not_requested() { ! grep -Fq -- "$1" "$MOCK_CURL_LOG" && pass || fail "$2 (unexpected '$1' in API requests)"; }
 assert_no_staging() {
   local staged
   for staged in "$1"/.jdev-install.*; do
@@ -435,13 +436,12 @@ esac
 EOF
 cat >"$FAKE_BIN/curl" <<'EOF'
 #!/usr/bin/env bash
+printf '%s\n' "$*" >>"$MOCK_CURL_ARGS_LOG"
 output=""
 url=""
-write_out=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --output) output="$2"; shift 2 ;;
-    --write-out) write_out="$2"; shift 2 ;;
     https://*) url="$1"; shift ;;
     *) shift ;;
   esac
@@ -452,7 +452,21 @@ case "$url" in
     [[ "${MOCK_LIST_FAIL-0}" != 1 ]] || exit 22
     printf '%s\n' "${MOCK_LTS_JSON-}"
     ;;
-  */binary/latest/*)
+  */assets/latest/*)
+    [[ "${MOCK_METADATA_FAIL-0}" != 1 ]] || exit 22
+    if [[ "${MOCK_BAD_METADATA-0}" == 1 ]]; then
+      printf '{"binary":{"package":{}}}\n'
+      exit 0
+    fi
+    if command -v sha256sum >/dev/null 2>&1; then
+      hash="$(sha256sum "$MOCK_ARCHIVE" | awk '{print $1}')"
+    else
+      hash="$(shasum -a 256 "$MOCK_ARCHIVE" | awk '{print $1}')"
+    fi
+    [[ "${MOCK_BAD_HASH-0}" != 1 ]] || hash="$(printf '%064d' 0)"
+    printf '[{"binary":{"package":{"name":"%s","checksum":"%s","link":"https://mock.example/releases/%s"}}}]\n' "$MOCK_ARCHIVE_NAME" "$hash" "$MOCK_ARCHIVE_NAME"
+    ;;
+  https://mirrors.tuna.tsinghua.edu.cn/Adoptium/*|https://mock.example/releases/*)
     [[ "${MOCK_HTTP_404-0}" != 1 ]] || exit 22
     if [[ "${MOCK_INTERRUPT-0}" == 1 ]]; then
       kill -TERM "$PPID"
@@ -460,16 +474,6 @@ case "$url" in
       exit 1
     fi
     cp "$MOCK_ARCHIVE" "$output"
-    [[ -z "$write_out" ]] || printf 'https://mock.example/releases/%s' "$MOCK_ARCHIVE_NAME"
-    ;;
-  *.sha256.txt)
-    if command -v sha256sum >/dev/null 2>&1; then
-      hash="$(sha256sum "$MOCK_ARCHIVE" | awk '{print $1}')"
-    else
-      hash="$(shasum -a 256 "$MOCK_ARCHIVE" | awk '{print $1}')"
-    fi
-    [[ "${MOCK_BAD_HASH-0}" != 1 ]] || hash="$(printf '%064d' 0)"
-    printf '%s  %s\n' "$hash" "$MOCK_ARCHIVE_NAME" >"$output"
     ;;
   *) exit 22 ;;
 esac
@@ -477,9 +481,10 @@ EOF
 chmod +x "$FAKE_BIN/uname" "$FAKE_BIN/curl"
 export PATH="$FAKE_BIN:$BASE_PATH" HOME="$TEST_HOME"
 export MOCK_OS=windows MOCK_ARCH=x86_64 MOCK_LTS_JSON='{"available_lts_releases":[8,11,17,21,25]}'
-export MOCK_CURL_LOG="${TEST_ROOT}/curl.log" TEST_JAVA_RUN_LOG="$EVENTS"
+export MOCK_CURL_LOG="${TEST_ROOT}/curl.log" MOCK_CURL_ARGS_LOG="${TEST_ROOT}/curl-args.log" TEST_JAVA_RUN_LOG="$EVENTS"
 unset JDK_HOME JAVA_HOME
 : >"$MOCK_CURL_LOG"
+: >"$MOCK_CURL_ARGS_LOG"
 : >"$EVENTS"
 
 bash -n "$JDEV" && pass || fail 'JDK command syntax'
@@ -528,10 +533,13 @@ run_jdev jdk install 22
 
 ZIP_17="${TEST_ROOT}/jdk-17.zip"
 make_archive zip 17.0.9 'jdk-17.0.9+9' "$ZIP_17"
-export MOCK_ARCHIVE="$ZIP_17" MOCK_ARCHIVE_NAME='jdk-17.zip'
+export MOCK_ARCHIVE="$ZIP_17" MOCK_ARCHIVE_NAME='OpenJDK17U-jdk_x64_windows_hotspot_17.0.9_9.zip'
 run_jdev jdk install 17
 assert_status 0 'Windows ZIP installs'
-assert_requested '/windows/x64/jdk/' 'Windows x64 artifact is selected'
+assert_requested '/Adoptium/17/jdk/x64/windows/OpenJDK17U-jdk_x64_windows_hotspot_17.0.9_9.zip' 'Windows x64 artifact is selected from Tsinghua'
+grep -Fq -- '--progress-bar' "$MOCK_CURL_ARGS_LOG" && pass || fail 'JDK download shows a progress bar'
+assert_not_requested '/binary/latest/' 'old binary download endpoint is unused'
+assert_not_requested '.sha256.txt' 'signed download URL is not used for checksum lookup'
 DEST_17="$JDK_HOME/temurin-jdk-17.0.9+9"
 assert_file "$DEST_17/bin/java.exe" 'Windows JDK is installed under versioned directory'
 assert_no_staging "$JDK_HOME" 'successful install cleans staging directory'
@@ -539,9 +547,42 @@ run_jdev jdk install 17
 assert_status 0 'repeated install succeeds'
 assert_contains '已安装' 'repeated install is a no-op'
 
+ZIP_8="${TEST_ROOT}/jdk-8.zip"
+make_archive zip 1.8.0_504 'jdk8u504-b01' "$ZIP_8"
+export MOCK_ARCHIVE="$ZIP_8" MOCK_ARCHIVE_NAME='OpenJDK8U-jdk_x64_windows_hotspot_8u504b01.zip'
+run_jdev jdk install 8
+assert_status 0 'JDK 8 installs from the mirror without a checksum sidecar'
+assert_requested '/assets/latest/8/hotspot?architecture=x64&image_type=jdk&os=windows&vendor=eclipse' 'JDK 8 checksum comes from release metadata'
+assert_requested '/Adoptium/8/jdk/x64/windows/OpenJDK8U-jdk_x64_windows_hotspot_8u504b01.zip' 'JDK 8 mirror artifact is requested'
+assert_file "$JDK_HOME/temurin-jdk8u504-b01/bin/java.exe" 'JDK 8 archive is installed'
+assert_not_requested '.sha256.txt' 'JDK 8 does not request an unavailable checksum file'
+
+run_jdev jdk install 8 --source=invalid
+[[ "$STATUS" -ne 0 ]] && pass || fail 'unknown download source is rejected'
+assert_contains '下载源必须是' 'unknown download source is explained'
+run_jdev jdk install 8 --source
+[[ "$STATUS" -ne 0 ]] && pass || fail 'missing source value is rejected'
+
+ZIP_17_OFFICIAL="${TEST_ROOT}/jdk-17-official.zip"
+make_archive zip 17.0.13 'jdk-17.0.13+1' "$ZIP_17_OFFICIAL"
+export MOCK_ARCHIVE="$ZIP_17_OFFICIAL" MOCK_ARCHIVE_NAME='OpenJDK17U-jdk_x64_windows_hotspot_17.0.13_1.zip'
+run_jdev jdk install 17 --source adoptium
+assert_status 0 'Adoptium source installs'
+assert_requested 'https://mock.example/releases/OpenJDK17U-jdk_x64_windows_hotspot_17.0.13_1.zip' 'Adoptium asset link is downloaded'
+assert_file "$JDK_HOME/temurin-jdk-17.0.13+1/bin/java.exe" 'Adoptium source JDK is installed'
+
+ZIP_17_SKIP="${TEST_ROOT}/jdk-17-skip.zip"
+make_archive zip 17.0.14 'jdk-17.0.14+1' "$ZIP_17_SKIP"
+export MOCK_ARCHIVE="$ZIP_17_SKIP" MOCK_ARCHIVE_NAME='OpenJDK17U-jdk_x64_windows_hotspot_17.0.14_1.zip' MOCK_BAD_HASH=1
+run_jdev jdk install --no-verify-sha256 17 --source=tsinghua
+assert_status 0 'SHA-256 check can be skipped explicitly'
+assert_contains '已跳过 SHA-256 校验' 'skip verification is announced'
+assert_file "$JDK_HOME/temurin-jdk-17.0.14+1/bin/java.exe" 'JDK installs with verification disabled'
+unset MOCK_BAD_HASH
+
 ZIP_17_NEW="${TEST_ROOT}/jdk-17-new.zip"
 make_archive zip 17.0.10 'jdk-17.0.10+1' "$ZIP_17_NEW"
-export MOCK_ARCHIVE="$ZIP_17_NEW" MOCK_ARCHIVE_NAME='jdk-17-new.zip'
+export MOCK_ARCHIVE="$ZIP_17_NEW" MOCK_ARCHIVE_NAME='OpenJDK17U-jdk_x64_windows_hotspot_17.0.10_1.zip'
 run_jdev jdk install 17
 assert_status 0 'new patch installs beside old patch'
 assert_file "$DEST_17/bin/java.exe" 'old patch remains installed'
@@ -549,13 +590,19 @@ assert_file "$JDK_HOME/temurin-jdk-17.0.10+1/bin/java.exe" 'new patch is install
 
 ZIP_17_BAD="${TEST_ROOT}/jdk-17-bad.zip"
 make_archive zip 17.0.11 'jdk-17.0.11+1' "$ZIP_17_BAD"
-export MOCK_ARCHIVE="$ZIP_17_BAD" MOCK_ARCHIVE_NAME='jdk-17-bad.zip' MOCK_BAD_HASH=1
+export MOCK_ARCHIVE="$ZIP_17_BAD" MOCK_ARCHIVE_NAME='OpenJDK17U-jdk_x64_windows_hotspot_17.0.11_1.zip' MOCK_BAD_HASH=1
 run_jdev jdk install 17
 [[ "$STATUS" -ne 0 ]] && pass || fail 'checksum mismatch fails'
 assert_contains 'SHA-256 校验失败' 'checksum mismatch is explained'
 assert_absent "$JDK_HOME/temurin-jdk-17.0.11+1" 'checksum mismatch leaves no installation'
 assert_no_staging "$JDK_HOME" 'checksum failure cleans staging directory'
 unset MOCK_BAD_HASH
+export MOCK_BAD_METADATA=1
+run_jdev jdk install 17
+[[ "$STATUS" -ne 0 ]] && pass || fail 'malformed release metadata fails'
+assert_contains '缺少归档文件名' 'malformed release metadata is explained'
+assert_no_staging "$JDK_HOME" 'metadata failure cleans staging directory'
+unset MOCK_BAD_METADATA
 export MOCK_INTERRUPT=1
 run_jdev jdk install 17
 [[ "$STATUS" -ne 0 ]] && pass || fail 'interrupted install fails'
@@ -568,14 +615,14 @@ perl -MIO::Compress::Zip -e '
   $zip->print("JAVA_VERSION=\"17.0.11\"\n");
   $zip->close() or die $IO::Compress::Zip::ZipError;
 ' "$BAD_ZIP"
-export MOCK_ARCHIVE="$BAD_ZIP" MOCK_ARCHIVE_NAME='traversal.zip'
+export MOCK_ARCHIVE="$BAD_ZIP" MOCK_ARCHIVE_NAME='OpenJDK17U-jdk_x64_windows_hotspot_17.0.11_1.zip'
 run_jdev jdk install 17
 [[ "$STATUS" -ne 0 ]] && pass || fail 'traversal archive is rejected'
 assert_contains '目录结构不安全' 'traversal archive explains rejection'
 assert_absent "$TEST_ROOT/escape" 'traversal archive cannot escape staging'
 assert_no_staging "$JDK_HOME" 'invalid archive cleans staging directory'
 
-export MOCK_ARCHIVE="$ZIP_17_BAD" MOCK_ARCHIVE_NAME='jdk-17-bad.zip'
+export MOCK_ARCHIVE="$ZIP_17_BAD" MOCK_ARCHIVE_NAME='OpenJDK17U-jdk_x64_windows_hotspot_17.0.11_1.zip'
 mkdir -p "$JDK_HOME/temurin-jdk-17.0.11+1"
 printf 'keep\n' >"$JDK_HOME/temurin-jdk-17.0.11+1/marker"
 run_jdev jdk install 17
@@ -586,32 +633,32 @@ assert_no_staging "$JDK_HOME" 'collision cleans staging directory'
 export MOCK_HTTP_404=1
 run_jdev jdk install 17
 [[ "$STATUS" -ne 0 ]] && pass || fail 'unavailable platform package fails'
-assert_contains '当前平台可能没有' 'missing package error is clear'
+assert_contains '镜像尚未同步' 'missing package error is clear'
 assert_no_staging "$JDK_HOME" 'download failure cleans staging directory'
 unset MOCK_HTTP_404
 
 LINUX_TAR="${TEST_ROOT}/jdk-21.tar.gz"
 make_archive linux 21.0.4 'jdk-21.0.4+1' "$LINUX_TAR"
 export MOCK_OS=linux MOCK_ARCH=aarch64 JDK_HOME="${TEST_ROOT}/linux installs"
-export MOCK_ARCHIVE="$LINUX_TAR" MOCK_ARCHIVE_NAME='jdk-21.tar.gz'
+export MOCK_ARCHIVE="$LINUX_TAR" MOCK_ARCHIVE_NAME='OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.4_1.tar.gz'
 run_jdev jdk install 21
 assert_status 0 'Linux tar.gz installs'
-assert_requested '/linux/aarch64/jdk/' 'Linux ARM64 artifact is selected'
+assert_requested '/Adoptium/21/jdk/aarch64/linux/' 'Linux ARM64 artifact is selected'
 assert_file "$JDK_HOME/temurin-jdk-21.0.4+1/bin/java" 'Linux JDK is installed'
 
 MAC_TAR="${TEST_ROOT}/jdk-17-mac.tar.gz"
 make_archive mac 17.0.12 'jdk-17.0.12+1' "$MAC_TAR"
 export MOCK_OS=mac MOCK_ARCH=arm64 JDK_HOME="${TEST_ROOT}/mac installs"
-export MOCK_ARCHIVE="$MAC_TAR" MOCK_ARCHIVE_NAME='jdk-17-mac.tar.gz'
+export MOCK_ARCHIVE="$MAC_TAR" MOCK_ARCHIVE_NAME='OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.12_1.tar.gz'
 run_jdev jdk install 17
 assert_status 0 'macOS tar.gz installs'
-assert_requested '/mac/aarch64/jdk/' 'macOS ARM64 artifact is selected'
+assert_requested '/Adoptium/17/jdk/aarch64/mac/' 'macOS ARM64 artifact is selected'
 assert_file "$JDK_HOME/temurin-jdk-17.0.12+1/Contents/Home/bin/java" 'macOS JDK layout is retained'
 run_jdev jdk ls
 assert_contains "$JDK_HOME/temurin-jdk-17.0.12+1/Contents/Home" 'macOS local list returns actual JAVA_HOME'
 
 unset JDK_HOME
-export MOCK_OS=windows MOCK_ARCH=x86_64 MOCK_ARCHIVE="$ZIP_17" MOCK_ARCHIVE_NAME='jdk-17.zip'
+export MOCK_OS=windows MOCK_ARCH=x86_64 MOCK_ARCHIVE="$ZIP_17" MOCK_ARCHIVE_NAME='OpenJDK17U-jdk_x64_windows_hotspot_17.0.9_9.zip'
 run_jdev jdk install 17
 assert_status 0 'default HOME/.jdks installation works'
 cat >"$FAKE_BIN/mvn" <<'EOF'
