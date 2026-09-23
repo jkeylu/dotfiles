@@ -8,7 +8,8 @@ Usage: codev create <name>
        codev refresh-repos
        codev --help
 
-Create a workspace directory with links to selected Git applications.
+Create a workspace directory with links to selected Git applications, a
+RELEASE directory, and a VS Code workspace file.
 Run refresh-repos after adding, removing, or moving applications.
 
 Environment:
@@ -36,6 +37,11 @@ indexed_count=0
 destination=''
 created_destination=0
 created_links=()
+release_dir=''
+created_release=0
+workspace_file=''
+workspace_temp=''
+created_workspace_file=0
 
 to_absolute_path() {
   local path=$1
@@ -70,11 +76,22 @@ cleanup() {
   if [[ -n "$index_temp" ]]; then
     rm -f -- "$index_temp" || true
   fi
+  if [[ -n "$workspace_temp" ]]; then
+    rm -f -- "$workspace_temp" || true
+  fi
   if ((status != 0)); then
+    if ((created_workspace_file)); then
+      rm -f -- "$workspace_file" ||
+        printf 'codev: could not remove incomplete workspace file: %s\n' "$workspace_file" >&2
+    fi
     for ((i = ${#created_links[@]} - 1; i >= 0; i--)); do
       remove_created_link "${created_links[$i]}" ||
         printf 'codev: could not remove incomplete link: %s\n' "${created_links[$i]}" >&2
     done
+    if ((created_release)); then
+      rmdir -- "$release_dir" 2>/dev/null ||
+        printf 'codev: could not remove incomplete directory: %s\n' "$release_dir" >&2
+    fi
     if ((created_destination)); then
       rmdir -- "$destination" 2>/dev/null || true
     fi
@@ -99,6 +116,54 @@ create_link() {
   else
     ln -s -- "$source" "$link"
   fi
+}
+
+json_quote() {
+  local value=$1 result='' character escaped code i
+  local LC_ALL=C
+
+  for ((i = 0; i < ${#value}; i++)); do
+    character=${value:i:1}
+    case "$character" in
+      '"') result+='\"' ;;
+      '\') result+='\\' ;;
+      *)
+        printf -v code '%d' "'$character"
+        if ((code < 32)); then
+          printf -v escaped '\\u%04x' "$code"
+          result+=$escaped
+        else
+          result+=$character
+        fi
+        ;;
+    esac
+  done
+  printf '"%s"' "$result"
+}
+
+write_workspace() {
+  local index separator quoted
+  local -n folders=$1
+
+  workspace_temp="$(mktemp "$destination/.codev-workspace.tmp.XXXXXX")" ||
+    die "cannot create workspace file in: $destination"
+  {
+    printf '{\n  "folders": [\n'
+    for index in "${!folders[@]}"; do
+      quoted="$(json_quote "${folders[$index]}")"
+      separator=,
+      ((index + 1 < ${#folders[@]})) || separator=''
+      printf '    { "path": %s }%s\n' "$quoted" "$separator"
+    done
+    printf '  ]\n}\n'
+  } >"$workspace_temp" || die "cannot write workspace file: $workspace_file"
+
+  if [[ ! -e "$workspace_file" && ! -L "$workspace_file" ]]; then
+    created_workspace_file=1
+  fi
+  mv -f -- "$workspace_temp" "$workspace_file" ||
+    die "cannot replace workspace file: $workspace_file"
+  workspace_temp=''
 }
 
 confirm_append() {
@@ -164,7 +229,10 @@ refresh_index() {
 create_workspace() {
   local name=$1 code_dir workspace_dir index_file app relative selection status
   local label index found source link key previous_key existing_destination=0
+  local entry entry_name entry_key duplicate release_key workspace_key
+  local nullglob_was_set=0 dotglob_was_set=0
   local -a labels=() applications=() chosen_apps=() chosen_names=() chosen_keys=()
+  local -a workspace_names=() workspace_keys=()
 
   [[ -n "$name" && "$name" != . && "$name" != .. &&
      "$name" != */* && "$name" != *\\* ]] || die 'name must be a single directory name.'
@@ -172,6 +240,8 @@ create_workspace() {
 
   workspace_dir="$(to_absolute_path "${CODEV_WORKSPACE_DIR:-$invocation_dir}")"
   destination="${workspace_dir%/}/$name"
+  release_dir="$destination/RELEASE"
+  workspace_file="$destination/$name.code-workspace"
 
   index_file="$code_dir/.codev-repos"
   [[ -f "$index_file" && -r "$index_file" ]] ||
@@ -223,6 +293,14 @@ create_workspace() {
   for index in "${!chosen_names[@]}"; do
     key=${chosen_names[$index]}
     if is_windows; then key=${key,,}; fi
+    release_key=RELEASE
+    workspace_key="$name.code-workspace"
+    if is_windows; then
+      release_key=${release_key,,}
+      workspace_key=${workspace_key,,}
+    fi
+    [[ "$key" != "$release_key" && "$key" != "$workspace_key" ]] ||
+      die "selected application uses a reserved workspace name: ${chosen_names[$index]}"
     for previous_key in "${chosen_keys[@]}"; do
       [[ "$key" != "$previous_key" ]] || die "selected applications share the link name: ${chosen_names[$index]}"
     done
@@ -233,6 +311,15 @@ create_workspace() {
     [[ -d "$destination" && ! -L "$destination" ]] || die "destination is not a regular directory: $destination"
     confirm_append || return 0
     existing_destination=1
+
+    if [[ -e "$release_dir" || -L "$release_dir" ]]; then
+      [[ -d "$release_dir" && ! -L "$release_dir" ]] ||
+        die "RELEASE path is not a regular directory: $release_dir"
+    fi
+    if [[ -e "$workspace_file" || -L "$workspace_file" ]]; then
+      [[ -f "$workspace_file" && ! -L "$workspace_file" ]] ||
+        die "workspace path is not a regular file: $workspace_file"
+    fi
   fi
 
   for index in "${!chosen_apps[@]}"; do
@@ -242,12 +329,53 @@ create_workspace() {
     fi
   done
 
+  if ((existing_destination)); then
+    shopt -q nullglob && nullglob_was_set=1
+    shopt -q dotglob && dotglob_was_set=1
+    shopt -s nullglob dotglob
+    for entry in "$destination"/*; do
+      [[ -L "$entry" && -d "$entry" ]] || continue
+      entry_name=${entry##*/}
+      entry_key=$entry_name
+      if is_windows; then entry_key=${entry_key,,}; fi
+      workspace_names+=("$entry_name")
+      workspace_keys+=("$entry_key")
+    done
+    ((nullglob_was_set)) || shopt -u nullglob
+    ((dotglob_was_set)) || shopt -u dotglob
+  fi
+
+  for index in "${!chosen_names[@]}"; do
+    key=${chosen_names[$index]}
+    if is_windows; then key=${key,,}; fi
+    duplicate=0
+    for previous_key in "${workspace_keys[@]}"; do
+      if [[ "$key" == "$previous_key" ]]; then
+        duplicate=1
+        break
+      fi
+    done
+    if ((!duplicate)); then
+      workspace_names+=("${chosen_names[$index]}")
+      workspace_keys+=("$key")
+    fi
+  done
+  workspace_names+=(RELEASE)
+
   mkdir -p -- "$workspace_dir" || die "cannot create workspace directory: $workspace_dir"
   if ((existing_destination)); then
     [[ -d "$destination" && ! -L "$destination" ]] || die "destination changed: $destination"
   else
     mkdir -- "$destination" || die "cannot create destination: $destination"
     created_destination=1
+  fi
+
+  if [[ -e "$release_dir" || -L "$release_dir" ]]; then
+    [[ -d "$release_dir" && ! -L "$release_dir" ]] ||
+      die "RELEASE path changed: $release_dir"
+  else
+    mkdir -- "$release_dir" || die "cannot create RELEASE directory: $release_dir"
+    created_release=1
   fi
 
   for index in "${!chosen_apps[@]}"; do
@@ -260,6 +388,7 @@ create_workspace() {
     created_links+=("$link")
     printf '%s -> %s\n' "$link" "${chosen_apps[$index]}"
   done
+  write_workspace workspace_names
 }
 
 case "${1:-}" in
