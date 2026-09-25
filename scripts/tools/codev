@@ -4,17 +4,16 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: codev create <name>
-       codev refresh-repos
+Usage: codev
        codev --help
 
-Create a workspace directory with links to selected Git applications, a
-RELEASE directory, and a VS Code workspace file.
-Run refresh-repos after adding, removing, or moving applications.
+Without arguments, open the interactive workspace manager. Use its fixed menu
+items to refresh the application index and create workspaces. Esc returns one
+level (or exits the root menu); q exits directly from any menu.
 
 Environment:
-  CODEV_CODE_DIR       Directory to search for applications (required)
-  CODEV_WORKSPACE_DIR  Workspace parent (defaults to the current directory)
+  CODEV_CODES_PATH       Application search root (defaults to $HOME/CODES)
+  CODEV_WORKSPACES_PATH  Workspace parent (defaults to $HOME/WORKSPACES)
 EOF
 }
 
@@ -23,11 +22,14 @@ die() {
   exit 1
 }
 
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*) codev_platform=windows ;;
+  Darwin*) codev_platform=macos ;;
+  *) codev_platform=linux ;;
+esac
+
 is_windows() {
-  case "$(uname -s)" in
-    MINGW*|MSYS*|CYGWIN*) return 0 ;;
-    *) return 1 ;;
-  esac
+  [[ "$codev_platform" == windows ]]
 }
 
 invocation_dir="$(pwd -P)"
@@ -42,6 +44,18 @@ created_release=0
 workspace_file=''
 workspace_temp=''
 created_workspace_file=0
+create_menu_label='+ New workspace'
+refresh_menu_label='+ Refresh Repos'
+workspace_menu_prefix='  '
+application_menu_prefix='  '
+open_workspace_action='+ Open workspace folder'
+open_vscode_action='+ Open VS Code workspace'
+open_terminal_action='+ Open terminal'
+workspace_menu_hint='Up/Down: move  Enter: open  Esc/q: quit'
+create_menu_hint='Up/Down: move  Space: toggle  Enter: create  Esc: back  q: quit'
+application_menu_hint='Up/Down: move  Space: select apps  Enter: run/confirm  Esc: back  q: quit'
+empty_menu_hint='Up/Down: move  Enter: run  Esc: back  q: quit'
+action_menu_hint='Up/Down: move  Enter: run  Esc: back  q: quit'
 
 to_absolute_path() {
   local path=$1
@@ -56,8 +70,7 @@ to_absolute_path() {
 
 resolve_code_dir() {
   local path
-  [[ -n "${CODEV_CODE_DIR:-}" ]] || die 'CODEV_CODE_DIR is not set.'
-  path="$(to_absolute_path "$CODEV_CODE_DIR")"
+  path="$(to_absolute_path "${CODEV_CODES_PATH:-$HOME/CODES}")"
   [[ -d "$path" && -r "$path" ]] || die "code directory is not readable: $path"
   cd -P -- "$path" && pwd -P || die "cannot enter code directory: $path"
 }
@@ -227,7 +240,7 @@ refresh_index() {
 }
 
 create_workspace() {
-  local name=$1 code_dir workspace_dir index_file app relative selection status
+  local name=$1 code_dir workspace_dir index_file app relative selection
   local label index found source link key previous_key existing_destination=0
   local entry entry_name entry_key duplicate release_key workspace_key
   local nullglob_was_set=0 dotglob_was_set=0
@@ -235,17 +248,19 @@ create_workspace() {
   local -a workspace_names=() workspace_keys=()
 
   [[ -n "$name" && "$name" != . && "$name" != .. &&
-     "$name" != */* && "$name" != *\\* ]] || die 'name must be a single directory name.'
+     "$name" != */* && "$name" != *\\* &&
+     "$name" != *$'\n'* && "$name" != *$'\r'* ]] ||
+    die 'name must be a single directory name.'
   code_dir="$(resolve_code_dir)"
 
-  workspace_dir="$(to_absolute_path "${CODEV_WORKSPACE_DIR:-$invocation_dir}")"
+  workspace_dir="$(to_absolute_path "${CODEV_WORKSPACES_PATH:-$HOME/WORKSPACES}")"
   destination="${workspace_dir%/}/$name"
   release_dir="$destination/RELEASE"
   workspace_file="$destination/$name.code-workspace"
 
   index_file="$code_dir/.codev-repos"
   [[ -f "$index_file" && -r "$index_file" ]] ||
-    die "repository index is missing or unreadable: $index_file; run 'codev refresh-repos' first."
+    die "repository index is missing or unreadable: $index_file; select '$refresh_menu_label' in codev first."
   while IFS= read -r relative || [[ -n "$relative" ]]; do
     case "$relative" in
       .) app=$code_dir ;;
@@ -259,14 +274,15 @@ create_workspace() {
     labels+=("$relative")
     applications+=("$app")
   done <"$index_file"
-  [[ ${#labels[@]} -gt 0 ]] || die "no Git applications in index; run 'codev refresh-repos' after adding repositories."
+  [[ ${#labels[@]} -gt 0 ]] ||
+    die "no Git applications in index; select '$refresh_menu_label' in codev after adding repositories."
 
-  if selection="$(printf '%s\n' "${labels[@]}" | "$script_dir/picker" --multi --prompt 'Applications')"; then
+  if pick_menu selection labels 'Select applications' "$create_menu_hint" multi; then
     :
   else
-    status=$?
-    [[ $status -eq 1 || $status -eq 130 ]] && return 0
-    die "picker failed (exit $status)."
+    local picker_status=$?
+    [[ $picker_status -eq 130 ]] && return 0
+    return "$picker_status"
   fi
   [[ -n "$selection" ]] || return 0
 
@@ -281,7 +297,7 @@ create_workspace() {
     done
     ((found)) || die "picker returned an unknown application: $label"
     [[ -d "$source" && -d "$source/.git" ]] ||
-      die "application disappeared: $source; run 'codev refresh-repos'."
+      die "application disappeared: $source; select '$refresh_menu_label' in codev."
     source="$(cd -P -- "$source" && pwd -P)" || die "cannot enter application: $source"
     [[ "$code_dir" == / || "$source" == "$code_dir" || "$source" == "$code_dir/"* ]] ||
       die "indexed application is outside code directory: $source"
@@ -391,21 +407,527 @@ create_workspace() {
   write_workspace workspace_names
 }
 
-case "${1:-}" in
-  create)
-    [[ $# -eq 2 ]] || { usage >&2; exit 2; }
-    create_workspace "$2"
-    ;;
-  refresh-repos)
-    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
-    refresh_index
-    ;;
-  -h|--help|help)
-    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
-    usage
-    ;;
-  *)
-    usage >&2
-    exit 2
-    ;;
-esac
+reset_workspace_creation_state() {
+  destination=''
+  created_destination=0
+  created_links=()
+  release_dir=''
+  created_release=0
+  workspace_file=''
+  workspace_temp=''
+  created_workspace_file=0
+}
+
+run_create_workspace() (
+  reset_workspace_creation_state
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  create_workspace "$1"
+)
+
+run_refresh_index() (
+  # refresh_index and cleanup share these dynamically scoped variables. Keep
+  # them inside the subprocess so one failed refresh cannot pollute the manager.
+  local index_temp='' indexed_count=0
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  refresh_index
+)
+
+collect_workspace_entries() {
+  local workspace_dir=$1 entry name
+  local nullglob_was_set=0 dotglob_was_set=0
+  local -n workspace_labels_ref=$2 workspace_paths_ref=$3
+
+  workspace_labels_ref=()
+  workspace_paths_ref=()
+  if [[ -e "$workspace_dir" || -L "$workspace_dir" ]]; then
+    [[ -d "$workspace_dir" ]] || die "workspace root is not a directory: $workspace_dir"
+    [[ -r "$workspace_dir" && -x "$workspace_dir" ]] ||
+      die "workspace root is not readable: $workspace_dir"
+  else
+    return 0
+  fi
+
+  shopt -q nullglob && nullglob_was_set=1
+  shopt -q dotglob && dotglob_was_set=1
+  shopt -s nullglob dotglob
+  for entry in "${workspace_dir%/}"/*; do
+    [[ -d "$entry" ]] || continue
+    name=${entry##*/}
+    [[ "$name" != *$'\n'* && "$name" != *$'\r'* ]] ||
+      die "workspace name cannot be displayed: $name"
+    workspace_labels_ref+=("$workspace_menu_prefix$name")
+    workspace_paths_ref+=("$entry")
+  done
+  ((nullglob_was_set)) || shopt -u nullglob
+  ((dotglob_was_set)) || shopt -u dotglob
+}
+
+collect_linked_applications() {
+  local workspace=$1 entry name key release_key
+  local nullglob_was_set=0 dotglob_was_set=0
+  local -n application_labels_ref=$2
+
+  application_labels_ref=()
+  shopt -q nullglob && nullglob_was_set=1
+  shopt -q dotglob && dotglob_was_set=1
+  shopt -s nullglob dotglob
+  for entry in "${workspace%/}"/*; do
+    [[ -L "$entry" && -d "$entry" ]] || continue
+    name=${entry##*/}
+    [[ "$name" != *$'\n'* && "$name" != *$'\r'* ]] ||
+      die "application name cannot be displayed: $name"
+    key=$name
+    release_key=RELEASE
+    if is_windows; then
+      key=${key,,}
+      release_key=${release_key,,}
+    fi
+    [[ "$key" != "$release_key" ]] || continue
+    application_labels_ref+=("$name")
+  done
+  ((nullglob_was_set)) || shopt -u nullglob
+  ((dotglob_was_set)) || shopt -u dotglob
+}
+
+pick_menu() {
+  local result_name=$1 items_name=$2 prompt=$3 hint=$4 mode=${5:-single}
+  local action_count=${6:-0} status
+  local -n result_ref=$result_name items_ref=$items_name
+  local -a picker_args=(--quit --prompt "$prompt" --hint "$hint")
+
+  if [[ "$mode" == multi ]]; then picker_args+=(--multi); fi
+  if ((action_count)); then picker_args+=(--actions "$action_count"); fi
+  if result_ref="$(printf '%s\n' "${items_ref[@]}" |
+    "$script_dir/picker" "${picker_args[@]}")"; then
+    return 0
+  else
+    status=$?
+    [[ $status -eq 1 || $status -eq 130 ]] && return 130
+    [[ $status -eq 131 ]] && return 131
+    die "picker failed (exit $status)."
+  fi
+}
+
+open_in_file_manager() {
+  local path=$1 native_path command_name
+
+  if [[ ! -d "$path" ]]; then
+    printf 'codev: folder is not available: %s\n' "$path" >&2
+    return 1
+  fi
+  case "$codev_platform" in
+    windows)
+      command_name=explorer.exe
+      if ! command -v "$command_name" >/dev/null 2>&1; then
+        printf 'codev: explorer.exe is not available.\n' >&2
+        return 1
+      fi
+      if ! native_path="$(cygpath -w "$path")"; then
+        printf 'codev: cannot convert path: %s\n' "$path" >&2
+        return 1
+      fi
+      MSYS_NO_PATHCONV=1 "$command_name" "$native_path" >/dev/null 2>&1 ||
+        { printf 'codev: could not open folder: %s\n' "$path" >&2; return 1; }
+      ;;
+    macos)
+      command_name=open
+      if ! command -v "$command_name" >/dev/null 2>&1; then
+        printf 'codev: open is not available.\n' >&2
+        return 1
+      fi
+      "$command_name" "$path" >/dev/null 2>&1 ||
+        { printf 'codev: could not open folder: %s\n' "$path" >&2; return 1; }
+      ;;
+    *)
+      command_name=xdg-open
+      if ! command -v "$command_name" >/dev/null 2>&1; then
+        printf 'codev: xdg-open is not available.\n' >&2
+        return 1
+      fi
+      "$command_name" "$path" >/dev/null 2>&1 ||
+        { printf 'codev: could not open folder: %s\n' "$path" >&2; return 1; }
+      ;;
+  esac
+}
+
+resolve_workspace_file() {
+  local workspace=$1 workspace_name=$2 candidate entry
+  local nullglob_was_set=0
+  local -n result_ref=$3
+  local -a matches=()
+
+  candidate="$workspace/$workspace_name.code-workspace"
+  if [[ -f "$candidate" && ! -L "$candidate" ]]; then
+    result_ref=$candidate
+    return 0
+  fi
+
+  shopt -q nullglob && nullglob_was_set=1
+  shopt -s nullglob
+  for entry in "$workspace"/*.code-workspace; do
+    [[ -f "$entry" && ! -L "$entry" ]] && matches+=("$entry")
+  done
+  ((nullglob_was_set)) || shopt -u nullglob
+
+  if [[ ${#matches[@]} -ne 1 ]]; then
+    printf 'codev: cannot find a unique VS Code workspace file in: %s\n' "$workspace" >&2
+    return 1
+  fi
+  result_ref=${matches[0]}
+}
+
+open_vscode_workspace() {
+  local workspace=$1 workspace_name=$2 workspace_path editor
+
+  resolve_workspace_file "$workspace" "$workspace_name" workspace_path || return 1
+  if command -v code >/dev/null 2>&1; then
+    editor=code
+  elif is_windows && command -v code.cmd >/dev/null 2>&1; then
+    editor=code.cmd
+  elif [[ "$codev_platform" == macos && -d '/Applications/Visual Studio Code.app' ]]; then
+    open -a 'Visual Studio Code' "$workspace_path" >/dev/null 2>&1 ||
+      { printf 'codev: could not open VS Code workspace: %s\n' "$workspace_path" >&2; return 1; }
+    return 0
+  else
+    printf "codev: the VS Code 'code' command is not available.\n" >&2
+    return 1
+  fi
+
+  "$editor" "$workspace_path" >/dev/null 2>&1 ||
+    { printf 'codev: could not open VS Code workspace: %s\n' "$workspace_path" >&2; return 1; }
+}
+
+open_terminal_window() {
+  local directory shell_path=${SHELL:-$BASH} native_directory native_shell terminal
+  local -a terminal_command=()
+
+  directory="$(cd -P -- "$1" && pwd -P)" || {
+    printf 'codev: application directory is not available: %s\n' "$1" >&2
+    return 1
+  }
+
+  if [[ "$shell_path" != */* ]]; then
+    shell_path="$(command -v "$shell_path")" || {
+      printf 'codev: shell is not available: %s\n' "${SHELL:-$BASH}" >&2
+      return 1
+    }
+  fi
+  if [[ ! -x "$shell_path" ]]; then
+    printf 'codev: shell is not executable: %s\n' "$shell_path" >&2
+    return 1
+  fi
+
+  case "$codev_platform" in
+    windows)
+      native_directory="$(cygpath -w "$directory")" || return 1
+      native_shell="$(cygpath -w "$shell_path")" || return 1
+      if command -v wt.exe >/dev/null 2>&1; then
+        MSYS2_ARG_CONV_EXCL='*' wt.exe -w new new-tab -d "$native_directory" \
+          "$native_shell" -i >/dev/null 2>&1
+      elif command -v cmd.exe >/dev/null 2>&1; then
+        MSYS2_ARG_CONV_EXCL='*' cmd.exe /d /c start '' /d "$native_directory" \
+          "$native_shell" -i >/dev/null 2>&1
+      else
+        printf 'codev: no Windows terminal launcher is available.\n' >&2
+        return 1
+      fi
+      ;;
+    macos)
+      if ! command -v open >/dev/null 2>&1; then
+        printf 'codev: open is not available.\n' >&2
+        return 1
+      fi
+      open -a Terminal "$directory" >/dev/null 2>&1
+      ;;
+    *)
+      if command -v gnome-terminal >/dev/null 2>&1; then
+        terminal_command=(gnome-terminal --window "--working-directory=$directory" -- "$shell_path" -i)
+      elif command -v konsole >/dev/null 2>&1; then
+        terminal_command=(konsole --workdir "$directory" -e "$shell_path" -i)
+      elif command -v kitty >/dev/null 2>&1; then
+        terminal_command=(kitty --directory "$directory" "$shell_path" -i)
+      elif command -v alacritty >/dev/null 2>&1; then
+        terminal_command=(alacritty --working-directory "$directory" -e "$shell_path" -i)
+      elif command -v x-terminal-emulator >/dev/null 2>&1; then
+        terminal_command=(x-terminal-emulator -e "$shell_path" -c \
+          'cd -P -- "$1" && exec "$2" -i' codev "$directory" "$shell_path")
+      elif command -v xterm >/dev/null 2>&1; then
+        terminal_command=(xterm -e "$shell_path" -c \
+          'cd -P -- "$1" && exec "$2" -i' codev "$directory" "$shell_path")
+      else
+        printf 'codev: no supported terminal emulator is available.\n' >&2
+        return 1
+      fi
+
+      # Some terminal emulators remain attached until their window closes.
+      # Detaching keeps the codev manager responsive after launching the window.
+      "${terminal_command[@]}" </dev/null >/dev/null 2>&1 &
+      ;;
+  esac || {
+    printf 'codev: could not open a terminal in: %s\n' "$directory" >&2
+    return 1
+  }
+}
+
+read_workspace_name() (
+  local default_name key next prompt saved_tty typed_name workspace_name
+
+  restore_name_terminal() {
+    [[ -n "${saved_tty:-}" ]] || return 0
+    stty "$saved_tty" <&3 || true
+    exec 3>&-
+    saved_tty=''
+  }
+
+  default_name="$(date +%Y%m%d)-" || die 'cannot create the workspace name prefix.'
+  prompt='Workspace name (blank to cancel): '
+  if [[ -t 0 ]]; then
+    if ! { exec 3<>/dev/tty; } 2>/dev/null; then
+      printf 'codev: cannot open the terminal for workspace name input.\n' >&2
+      return 1
+    fi
+    saved_tty="$(stty -g <&3)" || return 1
+    stty -echo -icanon min 1 time 0 <&3 || return 1
+    trap restore_name_terminal EXIT
+    trap 'restore_name_terminal; exit 130' INT
+    trap 'restore_name_terminal; exit 143' TERM
+
+    workspace_name=$default_name
+    printf '%s%s' "$prompt" "$workspace_name" >&3
+    while IFS= read -r -s -n1 -u 3 key; do
+      case "$key" in
+        ''|$'\r'|$'\n')
+          printf '\r\n' >&3
+          break
+          ;;
+        $'\177'|$'\b')
+          # The generated prefix behaves like a selected initial value: one
+          # Backspace clears it. Once edited, Backspace removes one character.
+          if [[ "$workspace_name" == "$default_name" ]]; then
+            workspace_name=''
+          elif [[ -n "$workspace_name" ]]; then
+            workspace_name=${workspace_name:0:${#workspace_name}-1}
+          fi
+          ;;
+        $'\025') workspace_name='' ;; # Ctrl+U
+        $'\003') restore_name_terminal; return 130 ;; # Ctrl+C
+        $'\033')
+          # Esc by itself returns to the workspace list. Escape-prefixed
+          # Alt/arrow sequences are consumed and ignored so they cannot become
+          # part of the name.
+          if ! IFS= read -r -s -n1 -t 0.1 -u 3 next; then
+            printf '\r\n' >&3
+            workspace_name=''
+            break
+          fi
+          if [[ "$next" == '[' || "$next" == O ]]; then
+            IFS= read -r -s -n1 -t 0.1 -u 3 next || true
+          fi
+          continue
+          ;;
+        *)
+          [[ "$key" == [[:cntrl:]] ]] || workspace_name+=$key
+          ;;
+      esac
+      printf '\r\033[2K%s%s' "$prompt" "$workspace_name" >&3
+    done
+    trap - EXIT INT TERM
+    restore_name_terminal
+  else
+    printf '%s' "$prompt" >&2
+    IFS= read -r typed_name || return 1
+    if [[ -n "$typed_name" ]]; then
+      workspace_name="$default_name$typed_name"
+    else
+      workspace_name=''
+    fi
+  fi
+  printf '%s\n' "$workspace_name"
+)
+
+manage_application_actions() {
+  local action status index found
+  local -n selected_names_ref=$1 selected_paths_ref=$2
+  local -a action_labels=() action_paths=()
+
+  if [[ ${#selected_paths_ref[@]} -eq 1 ]]; then
+    action_labels+=("$open_terminal_action")
+    action_paths+=("${selected_paths_ref[0]}")
+  else
+    for index in "${!selected_paths_ref[@]}"; do
+      action_labels+=("$open_terminal_action / ${selected_names_ref[$index]}")
+      action_paths+=("${selected_paths_ref[$index]}")
+    done
+  fi
+
+  while :; do
+    if pick_menu action action_labels "Actions / ${#selected_paths_ref[@]} selected" \
+      "$action_menu_hint"; then
+      :
+    else
+      status=$?
+      [[ $status -eq 130 ]] && return 0
+      return "$status"
+    fi
+
+    found=0
+    for index in "${!action_paths[@]}"; do
+      if [[ "$action" == "${action_labels[$index]}" ]]; then
+        open_terminal_window "${action_paths[$index]}" || true
+        found=1
+        break
+      fi
+    done
+    ((found)) || die "picker returned an unknown application action: $action"
+  done
+}
+
+manage_workspace_applications() {
+  local workspace=$1 workspace_name=$2 selection label display_label found index status selected_path
+  local -a labels=() menu_items=() selected_names=() selected_paths=()
+
+  while :; do
+    if [[ ! -e "$workspace" && ! -L "$workspace" ]]; then
+      printf 'codev: workspace disappeared: %s\n' "$workspace" >&2
+      return 0
+    fi
+    if [[ ! -d "$workspace" || ! -r "$workspace" || ! -x "$workspace" ]]; then
+      printf 'codev: workspace is not a readable directory: %s\n' "$workspace" >&2
+      return 0
+    fi
+
+    collect_linked_applications "$workspace" labels
+    menu_items=("$open_workspace_action" "$open_vscode_action")
+    if [[ ${#labels[@]} -eq 0 ]]; then
+      if pick_menu selection menu_items "Applications / $workspace_name" "$empty_menu_hint"; then
+        :
+      else
+        status=$?
+        [[ $status -eq 130 ]] && return 0
+        return "$status"
+      fi
+    else
+      for label in "${labels[@]}"; do
+        menu_items+=("$application_menu_prefix$label")
+      done
+      if pick_menu selection menu_items "Applications / $workspace_name" \
+        "$application_menu_hint" multi 2; then
+        :
+      else
+        status=$?
+        [[ $status -eq 130 ]] && return 0
+        return "$status"
+      fi
+    fi
+
+    case "$selection" in
+      "$open_workspace_action") open_in_file_manager "$workspace" || true; continue ;;
+      "$open_vscode_action") open_vscode_workspace "$workspace" "$workspace_name" || true; continue ;;
+    esac
+    [[ -n "$selection" ]] || continue
+
+    selected_names=()
+    selected_paths=()
+    while IFS= read -r label; do
+      found=0
+      for index in "${!labels[@]}"; do
+        display_label="$application_menu_prefix${labels[$index]}"
+        if [[ "$label" == "$display_label" ]]; then
+          found=1
+          break
+        fi
+      done
+      ((found)) || die "picker returned an unknown application: $label"
+      selected_path="$workspace/${labels[$index]}"
+      [[ -L "$selected_path" && -d "$selected_path" ]] ||
+        die "selected application disappeared: $selected_path"
+      selected_names+=("${labels[$index]}")
+      selected_paths+=("$selected_path")
+    done <<<"$selection"
+
+    if manage_application_actions selected_names selected_paths; then
+      continue
+    else
+      status=$?
+      return "$status"
+    fi
+  done
+}
+
+manage_workspaces() {
+  local workspace_dir selection status name index found
+  local -a menu_items=() workspace_labels=() workspace_paths=()
+
+  workspace_dir="$(to_absolute_path "${CODEV_WORKSPACES_PATH:-$HOME/WORKSPACES}")"
+  while :; do
+    collect_workspace_entries "$workspace_dir" workspace_labels workspace_paths
+    menu_items=("$create_menu_label" "$refresh_menu_label" "${workspace_labels[@]}")
+    if pick_menu selection menu_items 'Workspaces' "$workspace_menu_hint"; then
+      :
+    else
+      status=$?
+      [[ $status -eq 130 ]] && return 0
+      return "$status"
+    fi
+
+    if [[ "$selection" == "$create_menu_label" ]]; then
+      if name="$(read_workspace_name)"; then
+        :
+      else
+        status=$?
+        printf '\n' >&2
+        return "$status"
+      fi
+      [[ -n "$name" ]] || continue
+      if run_create_workspace "$name"; then
+        continue
+      else
+        status=$?
+        [[ $status -eq 130 ]] && continue
+        return "$status"
+      fi
+    elif [[ "$selection" == "$refresh_menu_label" ]]; then
+      if run_refresh_index; then
+        continue
+      else
+        status=$?
+        return "$status"
+      fi
+    fi
+
+    found=0
+    for index in "${!workspace_paths[@]}"; do
+      if [[ "$selection" == "${workspace_labels[$index]}" ]]; then
+        name=${workspace_paths[$index]##*/}
+        if manage_workspace_applications "${workspace_paths[$index]}" "$name"; then
+          :
+        else
+          status=$?
+          return "$status"
+        fi
+        found=1
+        break
+      fi
+    done
+    ((found)) || die "picker returned an unknown workspace: $selection"
+  done
+}
+
+if (($# == 0)); then
+  if manage_workspaces; then
+    exit 0
+  else
+    status=$?
+    [[ $status -eq 131 ]] && exit 0
+    exit "$status"
+  fi
+elif (($# == 1)) && [[ "$1" == --help ]]; then
+  usage
+else
+  usage >&2
+  exit 2
+fi

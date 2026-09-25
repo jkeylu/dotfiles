@@ -29,15 +29,15 @@ git -C "$TEST_ROOT/work" commit -am pending >/dev/null
 git -C "$TEST_ROOT/work" switch main >/dev/null 2>&1
 
 mkdir "$TEST_ROOT/bin"
-cat > "$TEST_ROOT/bin/fzf" <<'EOF'
+cat > "$TEST_ROOT/bin/picker" <<'EOF'
 #!/usr/bin/env bash
 cat >/dev/null
 [[ " $* " == *' --multi '* ]] || exit 97
-[[ "${TEST_FZF_STATUS:-0}" -eq 0 ]] || exit "$TEST_FZF_STATUS"
+[[ "${TEST_PICKER_STATUS:-0}" -eq 0 ]] || exit "$TEST_PICKER_STATUS"
 printf '%s\n' "$TEST_SELECTION"
 EOF
-chmod +x "$TEST_ROOT/bin/fzf"
-export PATH="$REPO_DIR/scripts/tools:$REPO_DIR/scripts/git:$TEST_ROOT/bin:$PATH"
+chmod +x "$TEST_ROOT/bin/picker"
+export PATH="$TEST_ROOT/bin:$REPO_DIR/scripts/tools:$REPO_DIR/scripts/git:$PATH"
 
 cd "$TEST_ROOT/work"
 
@@ -51,7 +51,7 @@ if bash "$SCRIPT" main extra >"$TEST_ROOT/output" 2>"$TEST_ROOT/error"; then
 fi
 
 export TEST_SELECTION=$'merged-a\nmerged-b'
-TEST_FZF_STATUS=130 bash "$SCRIPT" --clean main >"$TEST_ROOT/output" 2>"$TEST_ROOT/error"
+TEST_PICKER_STATUS=130 bash "$SCRIPT" --clean main >"$TEST_ROOT/output" 2>"$TEST_ROOT/error"
 git show-ref --verify --quiet refs/heads/merged-a
 TEST_SELECTION=main
 if printf 'y\n' | bash "$SCRIPT" --clean main >"$TEST_ROOT/output" 2>"$TEST_ROOT/error"; then
