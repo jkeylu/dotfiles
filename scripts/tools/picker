@@ -11,19 +11,26 @@ picker_usage() {
 picker_sanitize_for_display() {
   local value=$1 output_name=${2-} result='' character code index
 
-  for ((index = 0; index < ${#value}; index++)); do
-    character=${value:index:1}
-    if [[ "$character" == $'\t' ]]; then
-      result+='    '
-      continue
-    fi
-    printf -v code '%d' "'$character"
-    if ((code < 32 || code == 127)); then
-      result+='?'
-    else
-      result+=$character
-    fi
-  done
+  # Menu labels almost never contain control bytes. Keep that common path as
+  # one Bash assignment; the character loop is disproportionately expensive
+  # for large Unicode application lists.
+  if [[ "$value" != *[$'\001'-$'\037'$'\177']* ]]; then
+    result=$value
+  else
+    for ((index = 0; index < ${#value}; index++)); do
+      character=${value:index:1}
+      if [[ "$character" == $'\t' ]]; then
+        result+='    '
+        continue
+      fi
+      printf -v code '%d' "'$character"
+      if ((code < 32 || code == 127)); then
+        result+='?'
+      else
+        result+=$character
+      fi
+    done
+  fi
   # Callers rendering a full list can pass an output variable to avoid one
   # command-substitution subshell per item; without it, the helper prints.
   if [[ -n "$output_name" ]]; then
@@ -113,8 +120,13 @@ picker_parse_args() {
 
 picker_read_items() {
   local item display_item
+  local -a input_items=()
 
-  while IFS= read -r item || [[ -n "$item" ]]; do
+  # mapfile performs the input loop in Bash itself and is substantially faster
+  # than one `read` invocation per row. Rebuild the arrays to retain the
+  # original behavior of ignoring empty input lines.
+  mapfile -t input_items
+  for item in "${input_items[@]}"; do
     [[ -n "$item" ]] || continue
     picker_items+=("$item")
     picker_sanitize_for_display "$item" display_item
@@ -168,7 +180,7 @@ picker_restore_terminal() {
 picker_exit_on_signal() {
   local status=$1
 
-  trap - EXIT INT TERM
+  trap - EXIT INT TERM WINCH
   picker_restore_terminal
   exit "$status"
 }
@@ -185,12 +197,23 @@ picker_emit_selection() {
   done
 }
 
+picker_update_terminal_size() {
+  local height ignored_width
+
+  if read -r height ignored_width < <(stty size <&3) && [[ "$height" =~ ^[0-9]+$ ]]; then
+    picker_terminal_height=$height
+  else
+    picker_terminal_height=24
+  fi
+  picker_terminal_size_dirty=0
+}
+
 picker_draw_menu() {
-  local height ignored_width visible last index label mark
+  local height visible last index label mark
   local selectable_start selectable_end selectable_total
 
-  read -r height ignored_width < <(stty size <&3)
-  [[ "$height" =~ ^[0-9]+$ ]] || height=24
+  if ((picker_terminal_size_dirty)); then picker_update_terminal_size; fi
+  height=$picker_terminal_height
   # Prompt, hint, their separator, the footer separator, and the footer consume
   # five rows. The footer deliberately has no trailing newline so drawing the
   # last terminal row cannot scroll the alternate screen.
@@ -236,7 +259,13 @@ picker_read_action() {
   local key prefix='' final='' has_prefix=0 has_final=0
 
   if ! IFS= read -r -s -n1 -u 3 key; then
-    picker_action=cancel
+    # A trapped WINCH interrupts Bash's read builtin. Redraw with the new
+    # dimensions instead of treating a terminal resize as end-of-input.
+    if ((picker_terminal_size_dirty)); then
+      picker_action=ignore
+    else
+      picker_action=cancel
+    fi
     return 0
   fi
   case "$key" in
@@ -265,8 +294,6 @@ picker_read_action() {
 }
 
 picker_run() {
-  local item
-
   if ! { exec 3<>/dev/tty; } 2>/dev/null; then
     printf 'Error: picker requires a terminal.\n' >&2
     return 2
@@ -285,13 +312,16 @@ picker_run() {
   trap picker_restore_terminal EXIT
   trap 'picker_exit_on_signal 130' INT
   trap 'picker_exit_on_signal 143' TERM
+  trap 'picker_terminal_size_dirty=1' WINCH
   # Disabling automatic wrapping lets the terminal clip long Unicode labels
   # by display width. This avoids maintaining a partial wcwidth table in Bash.
   printf '\033[?1049h\033[?25l\033[?7l' >&3
 
   picker_selected=()
   if ((picker_multi)); then
-    for item in "${picker_items[@]}"; do picker_selected+=(0); done
+    # Pattern substitution initializes the whole vector inside Bash instead of
+    # interpreting one loop body per application.
+    picker_selected=("${picker_items[@]/*/0}")
   fi
   picker_cursor=0
   picker_offset=0
@@ -313,18 +343,18 @@ picker_run() {
         fi
         ;;
       accept)
-        trap - EXIT INT TERM
+        trap - EXIT INT TERM WINCH
         picker_restore_terminal
         picker_emit_selection
         return 0
         ;;
       cancel)
-        trap - EXIT INT TERM
+        trap - EXIT INT TERM WINCH
         picker_restore_terminal
         return 130
         ;;
       quit)
-        trap - EXIT INT TERM
+        trap - EXIT INT TERM WINCH
         picker_restore_terminal
         return 131
         ;;
@@ -346,6 +376,8 @@ picker_reset_state() {
   picker_display_prompt=''
   picker_display_hint=''
   picker_terminal_open=0
+  picker_terminal_height=24
+  picker_terminal_size_dirty=1
 }
 
 picker_main() {

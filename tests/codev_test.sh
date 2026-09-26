@@ -11,6 +11,7 @@ FAKE_BIN="$TEST_ROOT/bin"
 CODEV_BIN="$TEST_ROOT/codev-bin"
 CODEV="$CODEV_BIN/codev"
 OUTPUT="$TEST_ROOT/output"
+GIT_BIN="$(command -v git)"
 TESTS=0
 FAILURES=0
 
@@ -66,7 +67,18 @@ run_create() {
 mkdir -p -- "$CODE_DIR/group/app one/.git" "$CODE_DIR/app-two/.git" \
   "$CODE_DIR/app-three/.git" "$CODE_DIR/中文应用/.git" \
   "$CODE_DIR/reserved/RELEASE/.git" \
-  "$WORKSPACE_DIR" "$FAKE_BIN" "$CODEV_BIN"
+  "$CODE_DIR/worktree-origin" "$WORKSPACE_DIR" "$FAKE_BIN" "$CODEV_BIN"
+"$GIT_BIN" -C "$CODE_DIR/app-two" init -q
+"$GIT_BIN" -C "$CODE_DIR/app-three" init -q
+"$GIT_BIN" -C "$CODE_DIR/app-two" symbolic-ref HEAD refs/heads/main
+"$GIT_BIN" -C "$CODE_DIR/app-three" symbolic-ref HEAD refs/heads/feature/menu-branch
+"$GIT_BIN" -C "$CODE_DIR/app-three" -c user.name=codev-test \
+  -c user.email=codev-test.invalid commit --allow-empty -qm fixture
+"$GIT_BIN" -C "$CODE_DIR/worktree-origin" init -q
+"$GIT_BIN" -C "$CODE_DIR/worktree-origin" -c user.name=codev-test \
+  -c user.email=codev-test.invalid commit --allow-empty -qm fixture
+"$GIT_BIN" -C "$CODE_DIR/worktree-origin" worktree add -qb feature/worktree \
+  "$CODE_DIR/app-worktree"
 printf '%s\n' 'group/app one' 'app-two' 'app-three' '中文应用' \
   'reserved/RELEASE' >"$CODE_DIR/.codev-repos"
 cp -- "$CODEV_SOURCE" "$CODEV"
@@ -131,6 +143,12 @@ cat >"$FAKE_BIN/codev-test-shell" <<'EOF'
 printf 'terminal\t%s\t%s\n' "$PWD" "$*" >>"$ACTION_LOG"
 EOF
 chmod +x "$FAKE_BIN/codev-test-shell"
+cat >"$FAKE_BIN/git" <<'EOF'
+#!/usr/bin/env bash
+printf 'git\t%s\n' "$*" >>"$ACTION_LOG"
+exit 97
+EOF
+chmod +x "$FAKE_BIN/git"
 
 SEQUENCE_COUNT=0
 start_picker_sequence() {
@@ -274,12 +292,14 @@ assert_absent "$WORKSPACE_DIR/$cancelled_name" 'picker cancellation creates no d
 
 MANAGE_DIR="$TEST_ROOT/manage"
 mkdir -p -- "$MANAGE_DIR/.hidden" "$MANAGE_DIR/alpha/ordinary" \
-  "$MANAGE_DIR/empty" "$MANAGE_DIR/zeta" "$MANAGE_DIR/新建工作目录"
+  "$MANAGE_DIR/empty" "$MANAGE_DIR/worktree" "$MANAGE_DIR/zeta" \
+  "$MANAGE_DIR/新建工作目录"
 printf 'not a workspace\n' >"$MANAGE_DIR/plain-file"
 printf 'not an application\n' >"$MANAGE_DIR/alpha/plain-file"
 create_test_link "$CODE_DIR/app-two" "$MANAGE_DIR/alpha/linked app"
 create_test_link "$CODE_DIR/app-three" "$MANAGE_DIR/alpha/中文链接"
 create_test_link "$CODE_DIR/reserved/RELEASE" "$MANAGE_DIR/alpha/RELEASE"
+create_test_link "$CODE_DIR/app-worktree" "$MANAGE_DIR/worktree/linked worktree"
 printf '{ "folders": [] }\n' >"$MANAGE_DIR/alpha/alpha.code-workspace"
 export CODEV_WORKSPACES_PATH="$MANAGE_DIR"
 
@@ -287,7 +307,7 @@ start_picker_sequence
 queue_picker 130
 run_manage
 assert_status 0 'manager exits successfully when the workspace list is cancelled'
-assert_workspace "$PICK_SEQUENCE_DIR/1.input" $'+ New workspace\n+ Refresh Repos\n  .hidden\n  alpha\n  empty\n  zeta\n  新建工作目录' 'manager lists fixed actions first and all workspace directories in name order'
+assert_workspace "$PICK_SEQUENCE_DIR/1.input" $'+ New workspace\n+ Refresh Repos\n  .hidden\n  alpha\n  empty\n  worktree\n  zeta\n  新建工作目录' 'manager lists fixed actions first and all workspace directories in name order'
 assert_not_contains "$PICK_SEQUENCE_DIR/1.input" '  plain-file' 'manager ignores regular files in the workspace root'
 assert_not_contains "$PICK_SEQUENCE_DIR/1.args" '--backend' 'codev uses picker without backend selection'
 assert_contains "$PICK_SEQUENCE_DIR/1.args" '--prompt Workspaces' 'workspace list uses the concise English title'
@@ -300,18 +320,25 @@ assert_status 0 'q exits directly from the workspace list'
 [[ "$(cat "$PICK_SEQUENCE_DIR/index")" -eq 1 ]] && pass || fail 'root q does not open another menu'
 
 start_picker_sequence
+queue_picker 0 '  worktree'
+queue_picker 130
+queue_picker 130
+run_manage
+assert_contains "$PICK_SEQUENCE_DIR/2.input" '  linked worktree  [feature/worktree]' 'application branches are read through a worktree .git pointer'
+
+start_picker_sequence
 queue_picker 0 '  alpha'
 queue_picker 0 '+ Open workspace folder'
 queue_picker 0 '+ Open VS Code workspace'
-queue_picker 0 $'  linked app\n  中文链接'
+queue_picker 0 $'  linked app  [main]\n  中文链接  [feature/menu-branch]'
 queue_picker 0 '+ Open terminal / linked app'
 queue_picker 130
 queue_picker 130
 queue_picker 130
 run_manage
 assert_status 0 'manager supports application selection and nested back navigation'
-application_menu_expected=$'+ Open workspace folder\n+ Open VS Code workspace\n  linked app\n  中文链接'
-assert_workspace "$PICK_SEQUENCE_DIR/2.input" "$application_menu_expected" 'workspace actions and linked applications share one menu'
+application_menu_expected=$'+ Open workspace folder\n+ Open VS Code workspace\n  linked app  [main]\n  中文链接  [feature/menu-branch]'
+assert_workspace "$PICK_SEQUENCE_DIR/2.input" "$application_menu_expected" 'workspace actions and linked applications show current branches in one menu'
 assert_not_contains "$PICK_SEQUENCE_DIR/2.input" 'ordinary' 'application list excludes regular directories'
 assert_not_contains "$PICK_SEQUENCE_DIR/2.input" 'plain-file' 'application list excludes regular files'
 assert_contains "$PICK_SEQUENCE_DIR/2.args" '--multi' 'application list enables multiple selection'
@@ -337,9 +364,18 @@ assert_workspace "$PICK_SEQUENCE_DIR/7.input" "$application_menu_expected" 'retu
 assert_contains "$PICK_SEQUENCE_DIR/8.input" '  alpha' 'cancelling the application list returns to the workspace list'
 assert_empty "$OUTPUT" 'application actions do not leak selected paths to command output'
 
+"$GIT_BIN" -C "$CODE_DIR/app-three" checkout --detach -q
 start_picker_sequence
 queue_picker 0 '  alpha'
-queue_picker 0 '  linked app'
+queue_picker 130
+queue_picker 130
+run_manage
+assert_contains "$PICK_SEQUENCE_DIR/2.input" '  中文链接  [detached]' 'detached HEAD is identified in the application list'
+assert_not_contains "$ACTION_LOG" $'git\t' 'building application menus does not launch Git subprocesses'
+
+start_picker_sequence
+queue_picker 0 '  alpha'
+queue_picker 0 '  linked app  [main]'
 queue_picker 130
 queue_picker 130
 queue_picker 130

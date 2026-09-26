@@ -22,9 +22,9 @@ die() {
   exit 1
 }
 
-case "$(uname -s)" in
-  MINGW*|MSYS*|CYGWIN*) codev_platform=windows ;;
-  Darwin*) codev_platform=macos ;;
+case $OSTYPE in
+  msys*|cygwin*) codev_platform=windows ;;
+  darwin*) codev_platform=macos ;;
   *) codev_platform=linux ;;
 esac
 
@@ -32,8 +32,20 @@ is_windows() {
   [[ "$codev_platform" == windows ]]
 }
 
-invocation_dir="$(pwd -P)"
-script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+# Resolve both directories with Bash builtins. Besides saving three startup
+# processes on Windows, this keeps relative environment paths anchored to the
+# directory from which codev was invoked.
+builtin cd -P -- . || die "cannot enter invocation directory: $PWD"
+invocation_dir=$PWD
+script_path=${BASH_SOURCE[0]}
+case "$script_path" in
+  */*) script_parent=${script_path%/*} ;;
+  *) script_parent=. ;;
+esac
+builtin cd -P -- "$script_parent" || die "cannot enter script directory: $script_parent"
+script_dir=$PWD
+builtin cd -P -- "$invocation_dir" || die "cannot return to invocation directory: $invocation_dir"
+unset script_path script_parent
 index_temp=''
 indexed_count=0
 destination=''
@@ -59,20 +71,44 @@ action_menu_hint='Up/Down: move  Enter: run  Esc: back  q: quit'
 
 to_absolute_path() {
   local path=$1
-  if is_windows; then
+  local -n result_ref=$2
+
+  # Git Bash already uses POSIX paths internally. Calling cygpath for those
+  # common paths costs a Windows process launch, so reserve it for native
+  # Windows input supplied through the environment.
+  if is_windows && [[ "$path" == *\\* || "$path" == [[:alpha:]]:* ]]; then
     path="$(cygpath -u "$path")" || die "cannot convert path: $1"
   fi
   case "$path" in
-    /*) printf '%s\n' "$path" ;;
-    *) printf '%s/%s\n' "$invocation_dir" "$path" ;;
+    /*) result_ref=$path ;;
+    *) result_ref="${invocation_dir%/}/$path" ;;
   esac
 }
 
+resolve_physical_directory() {
+  local path=$1 previous_dir=$PWD physical_path
+  local -n result_ref=$2
+
+  # cd and pwd are Bash builtins. Temporarily changing this process' directory
+  # avoids a command-substitution fork for every resolved application link.
+  if ! builtin cd -P -- "$path"; then
+    return 1
+  fi
+  physical_path=$PWD
+  builtin cd -P -- "$previous_dir" || die "cannot return to directory: $previous_dir"
+  result_ref=$physical_path
+}
+
 resolve_code_dir() {
-  local path
-  path="$(to_absolute_path "${CODEV_CODES_PATH:-$HOME/CODES}")"
-  [[ -d "$path" && -r "$path" ]] || die "code directory is not readable: $path"
-  cd -P -- "$path" && pwd -P || die "cannot enter code directory: $path"
+  local absolute_path resolved
+  local -n result_ref=$1
+
+  to_absolute_path "${CODEV_CODES_PATH:-$HOME/CODES}" absolute_path
+  [[ -d "$absolute_path" && -r "$absolute_path" ]] ||
+    die "code directory is not readable: $absolute_path"
+  resolve_physical_directory "$absolute_path" resolved ||
+    die "cannot enter code directory: $absolute_path"
+  result_ref=$resolved
 }
 
 remove_created_link() {
@@ -117,7 +153,7 @@ trap 'exit 143' TERM
 link_points_to() {
   local resolved
   [[ -L "$1" ]] || return 1
-  resolved="$(cd -P -- "$1" && pwd -P)" || return 1
+  resolve_physical_directory "$1" resolved || return 1
   [[ "$resolved" == "$2" ]]
 }
 
@@ -133,8 +169,16 @@ create_link() {
 
 json_quote() {
   local value=$1 result='' character escaped code i
+  local -n result_ref=$2
   local LC_ALL=C
 
+  # Repository directory names normally need no JSON escaping. Avoid the
+  # byte-by-byte loop for that overwhelmingly common case.
+  if [[ "$value" != *\"* && "$value" != *\\* &&
+        "$value" != *[$'\001'-$'\037']* ]]; then
+    result_ref="\"$value\""
+    return 0
+  fi
   for ((i = 0; i < ${#value}; i++)); do
     character=${value:i:1}
     case "$character" in
@@ -151,7 +195,7 @@ json_quote() {
         ;;
     esac
   done
-  printf '"%s"' "$result"
+  result_ref="\"$result\""
 }
 
 write_workspace() {
@@ -163,7 +207,7 @@ write_workspace() {
   {
     printf '{\n  "folders": [\n'
     for index in "${!folders[@]}"; do
-      quoted="$(json_quote "${folders[$index]}")"
+      json_quote "${folders[$index]}" quoted
       separator=,
       ((index + 1 < ${#folders[@]})) || separator=''
       printf '    { "path": %s }%s\n' "$quoted" "$separator"
@@ -193,7 +237,7 @@ confirm_append() {
 }
 
 scan_repository_dir() {
-  local dir=$1 depth=$2 root=$3 relative child
+  local dir=$1 depth=$2 root=$3 index_fd=$4 relative child
 
   [[ ! -f "$dir/.codevignore" ]] || return 0
   [[ -r "$dir" && -x "$dir" ]] || die "cannot scan directory: $dir"
@@ -208,7 +252,7 @@ scan_repository_dir() {
     fi
     [[ "$relative" != *$'\n'* && "$relative" != *$'\r'* ]] ||
       die "application path cannot be stored in the index: $relative"
-    printf '%s\n' "$relative" >>"$index_temp" || die "cannot write index: $index_temp"
+    printf '%s\n' "$relative" >&"$index_fd" || die "cannot write index: $index_temp"
     ((indexed_count += 1))
   fi
 
@@ -217,21 +261,23 @@ scan_repository_dir() {
   for child in "${dir%/}"/*/; do
     child=${child%/}
     [[ ! -L "$child" && "${child##*/}" != .git ]] || continue
-    scan_repository_dir "$child" "$((depth + 1))" "$root"
+    scan_repository_dir "$child" "$((depth + 1))" "$root" "$index_fd"
   done
 }
 
 refresh_index() {
-  local code_dir index_file
+  local code_dir index_file index_fd
 
-  code_dir="$(resolve_code_dir)"
+  resolve_code_dir code_dir
   index_file="$code_dir/.codev-repos"
   [[ ! -d "$index_file" ]] || die "index path is a directory: $index_file"
   index_temp="$(mktemp "$code_dir/.codev-repos.tmp.XXXXXX")" ||
     die "cannot create index in: $code_dir"
   indexed_count=0
   shopt -s nullglob dotglob
-  scan_repository_dir "$code_dir" 0 "$code_dir"
+  exec {index_fd}>"$index_temp" || die "cannot write index: $index_temp"
+  scan_repository_dir "$code_dir" 0 "$code_dir" "$index_fd"
+  exec {index_fd}>&- || die "cannot close index: $index_temp"
 
   [[ ! -d "$index_file" ]] || die "index path became a directory: $index_file"
   mv -f -- "$index_temp" "$index_file" || die "cannot replace index: $index_file"
@@ -241,19 +287,19 @@ refresh_index() {
 
 create_workspace() {
   local name=$1 code_dir workspace_dir index_file app relative selection
-  local label index found source link key previous_key existing_destination=0
-  local entry entry_name entry_key duplicate release_key workspace_key
+  local label index source resolved_source link key existing_destination=0
+  local entry entry_name entry_key release_key workspace_key
   local nullglob_was_set=0 dotglob_was_set=0
-  local -a labels=() applications=() chosen_apps=() chosen_names=() chosen_keys=()
-  local -a workspace_names=() workspace_keys=()
+  local -a labels=() chosen_apps=() chosen_names=() workspace_names=()
+  local -A application_by_label=() chosen_key_set=() workspace_key_set=()
 
   [[ -n "$name" && "$name" != . && "$name" != .. &&
      "$name" != */* && "$name" != *\\* &&
      "$name" != *$'\n'* && "$name" != *$'\r'* ]] ||
     die 'name must be a single directory name.'
-  code_dir="$(resolve_code_dir)"
+  resolve_code_dir code_dir
 
-  workspace_dir="$(to_absolute_path "${CODEV_WORKSPACES_PATH:-$HOME/WORKSPACES}")"
+  to_absolute_path "${CODEV_WORKSPACES_PATH:-$HOME/WORKSPACES}" workspace_dir
   destination="${workspace_dir%/}/$name"
   release_dir="$destination/RELEASE"
   workspace_file="$destination/$name.code-workspace"
@@ -272,7 +318,11 @@ create_workspace() {
       die "invalid application path in index: $relative"
     fi
     labels+=("$relative")
-    applications+=("$app")
+    # A hand-edited index can contain duplicates. Preserve the displayed rows
+    # and the historical first-match behavior without an O(n) lookup later.
+    if [[ -z ${application_by_label["$relative"]+present} ]]; then
+      application_by_label["$relative"]=$app
+    fi
   done <"$index_file"
   [[ ${#labels[@]} -gt 0 ]] ||
     die "no Git applications in index; select '$refresh_menu_label' in codev after adding repositories."
@@ -287,40 +337,32 @@ create_workspace() {
   [[ -n "$selection" ]] || return 0
 
   while IFS= read -r label; do
-    found=0
-    for index in "${!labels[@]}"; do
-      if [[ "$label" == "${labels[$index]}" ]]; then
-        source=${applications[$index]}
-        found=1
-        break
-      fi
-    done
-    ((found)) || die "picker returned an unknown application: $label"
+    source=${application_by_label["$label"]-}
+    [[ -n "$source" ]] || die "picker returned an unknown application: $label"
     [[ -d "$source" && -d "$source/.git" ]] ||
       die "application disappeared: $source; select '$refresh_menu_label' in codev."
-    source="$(cd -P -- "$source" && pwd -P)" || die "cannot enter application: $source"
-    [[ "$code_dir" == / || "$source" == "$code_dir" || "$source" == "$code_dir/"* ]] ||
-      die "indexed application is outside code directory: $source"
-    [[ "$source" != / ]] || die 'the filesystem root cannot be linked as an application.'
-    chosen_apps+=("$source")
-    chosen_names+=("${source##*/}")
+    resolve_physical_directory "$source" resolved_source || die "cannot enter application: $source"
+    [[ "$code_dir" == / || "$resolved_source" == "$code_dir" || "$resolved_source" == "$code_dir/"* ]] ||
+      die "indexed application is outside code directory: $resolved_source"
+    [[ "$resolved_source" != / ]] || die 'the filesystem root cannot be linked as an application.'
+    chosen_apps+=("$resolved_source")
+    chosen_names+=("${resolved_source##*/}")
   done <<<"$selection"
 
+  release_key=RELEASE
+  workspace_key="$name.code-workspace"
+  if is_windows; then
+    release_key=${release_key,,}
+    workspace_key=${workspace_key,,}
+  fi
   for index in "${!chosen_names[@]}"; do
     key=${chosen_names[$index]}
     if is_windows; then key=${key,,}; fi
-    release_key=RELEASE
-    workspace_key="$name.code-workspace"
-    if is_windows; then
-      release_key=${release_key,,}
-      workspace_key=${workspace_key,,}
-    fi
     [[ "$key" != "$release_key" && "$key" != "$workspace_key" ]] ||
       die "selected application uses a reserved workspace name: ${chosen_names[$index]}"
-    for previous_key in "${chosen_keys[@]}"; do
-      [[ "$key" != "$previous_key" ]] || die "selected applications share the link name: ${chosen_names[$index]}"
-    done
-    chosen_keys+=("$key")
+    [[ -z ${chosen_key_set["$key"]+present} ]] ||
+      die "selected applications share the link name: ${chosen_names[$index]}"
+    chosen_key_set["$key"]=1
   done
 
   if [[ -e "$destination" || -L "$destination" ]]; then
@@ -355,7 +397,7 @@ create_workspace() {
       entry_key=$entry_name
       if is_windows; then entry_key=${entry_key,,}; fi
       workspace_names+=("$entry_name")
-      workspace_keys+=("$entry_key")
+      workspace_key_set["$entry_key"]=1
     done
     ((nullglob_was_set)) || shopt -u nullglob
     ((dotglob_was_set)) || shopt -u dotglob
@@ -364,16 +406,9 @@ create_workspace() {
   for index in "${!chosen_names[@]}"; do
     key=${chosen_names[$index]}
     if is_windows; then key=${key,,}; fi
-    duplicate=0
-    for previous_key in "${workspace_keys[@]}"; do
-      if [[ "$key" == "$previous_key" ]]; then
-        duplicate=1
-        break
-      fi
-    done
-    if ((!duplicate)); then
+    if [[ -z ${workspace_key_set["$key"]+present} ]]; then
       workspace_names+=("${chosen_names[$index]}")
-      workspace_keys+=("$key")
+      workspace_key_set["$key"]=1
     fi
   done
   workspace_names+=(RELEASE)
@@ -466,12 +501,63 @@ collect_workspace_entries() {
   ((dotglob_was_set)) || shopt -u dotglob
 }
 
-collect_linked_applications() {
-  local workspace=$1 entry name key release_key
-  local nullglob_was_set=0 dotglob_was_set=0
-  local -n application_labels_ref=$2
+resolve_git_dir() {
+  local repository=$1 git_entry="$1/.git" pointer git_dir_path
+  local -n result_ref=$2
 
+  result_ref=''
+  if [[ -d "$git_entry" ]]; then
+    result_ref=$git_entry
+    return 0
+  fi
+  [[ -f "$git_entry" && -r "$git_entry" ]] || return 1
+  if ! IFS= read -r pointer <"$git_entry" && [[ -z "$pointer" ]]; then
+    return 1
+  fi
+  pointer=${pointer%$'\r'}
+  [[ "$pointer" == 'gitdir: '* ]] || return 1
+  git_dir_path=${pointer#gitdir: }
+  case "$git_dir_path" in
+    /*|[[:alpha:]]:[\\/]*) ;;
+    *) git_dir_path="${repository%/}/$git_dir_path" ;;
+  esac
+  [[ -d "$git_dir_path" ]] || return 1
+  result_ref=$git_dir_path
+}
+
+describe_git_head() {
+  local repository=$1 resolved_git_dir head
+  local -n result_ref=$2
+
+  result_ref=''
+  resolve_git_dir "$repository" resolved_git_dir || return 0
+  [[ -f "$resolved_git_dir/HEAD" && -r "$resolved_git_dir/HEAD" ]] || return 0
+  if ! IFS= read -r head <"$resolved_git_dir/HEAD" && [[ -z "$head" ]]; then
+    return 0
+  fi
+  head=${head%$'\r'}
+  case "$head" in
+    'ref: refs/heads/'*) result_ref=${head#ref: refs/heads/} ;;
+    *)
+      # Git currently uses 40-character SHA-1 or 64-character SHA-256 object
+      # IDs. Reading HEAD directly avoids one Windows process per repository.
+      if [[ "$head" =~ ^[[:xdigit:]]{40}([[:xdigit:]]{24})?$ ]]; then
+        result_ref=detached
+      fi
+      ;;
+  esac
+}
+
+collect_linked_applications() {
+  local workspace=$1 entry name key release_key head_label display_label
+  local nullglob_was_set=0 dotglob_was_set=0
+  local -n application_names_ref=$2 application_paths_ref=$3 application_labels_ref=$4
+
+  application_names_ref=()
+  application_paths_ref=()
   application_labels_ref=()
+  release_key=RELEASE
+  if is_windows; then release_key=${release_key,,}; fi
   shopt -q nullglob && nullglob_was_set=1
   shopt -q dotglob && dotglob_was_set=1
   shopt -s nullglob dotglob
@@ -481,13 +567,14 @@ collect_linked_applications() {
     [[ "$name" != *$'\n'* && "$name" != *$'\r'* ]] ||
       die "application name cannot be displayed: $name"
     key=$name
-    release_key=RELEASE
-    if is_windows; then
-      key=${key,,}
-      release_key=${release_key,,}
-    fi
+    if is_windows; then key=${key,,}; fi
     [[ "$key" != "$release_key" ]] || continue
-    application_labels_ref+=("$name")
+    describe_git_head "$entry" head_label
+    display_label=$name
+    [[ -z "$head_label" ]] || display_label+="  [$head_label]"
+    application_names_ref+=("$name")
+    application_paths_ref+=("$entry")
+    application_labels_ref+=("$display_label")
   done
   ((nullglob_was_set)) || shopt -u nullglob
   ((dotglob_was_set)) || shopt -u dotglob
@@ -495,14 +582,16 @@ collect_linked_applications() {
 
 pick_menu() {
   local result_name=$1 items_name=$2 prompt=$3 hint=$4 mode=${5:-single}
-  local action_count=${6:-0} status
+  local action_count=${6:-0} status picker_input
   local -n result_ref=$result_name items_ref=$items_name
   local -a picker_args=(--quit --prompt "$prompt" --hint "$hint")
 
   if [[ "$mode" == multi ]]; then picker_args+=(--multi); fi
   if ((action_count)); then picker_args+=(--actions "$action_count"); fi
-  if result_ref="$(printf '%s\n' "${items_ref[@]}" |
-    "$script_dir/picker" "${picker_args[@]}")"; then
+  # Building stdin with printf -v keeps the producer in this shell. A pipeline
+  # would fork an otherwise throwaway Bash process for every displayed menu.
+  printf -v picker_input '%s\n' "${items_ref[@]}"
+  if result_ref="$("$script_dir/picker" "${picker_args[@]}" <<<"$picker_input")"; then
     return 0
   else
     status=$?
@@ -602,10 +691,10 @@ open_vscode_workspace() {
 }
 
 open_terminal_window() {
-  local directory shell_path=${SHELL:-$BASH} native_directory native_shell terminal
+  local directory shell_path=${SHELL:-$BASH} native_directory native_shell
   local -a terminal_command=()
 
-  directory="$(cd -P -- "$1" && pwd -P)" || {
+  resolve_physical_directory "$1" directory || {
     printf 'codev: application directory is not available: %s\n' "$1" >&2
     return 1
   }
@@ -750,17 +839,19 @@ read_workspace_name() (
 )
 
 manage_application_actions() {
-  local action status index found
+  local action action_label status index selected_path
   local -n selected_names_ref=$1 selected_paths_ref=$2
-  local -a action_labels=() action_paths=()
+  local -a action_labels=()
+  local -A action_path_by_label=()
 
   if [[ ${#selected_paths_ref[@]} -eq 1 ]]; then
     action_labels+=("$open_terminal_action")
-    action_paths+=("${selected_paths_ref[0]}")
+    action_path_by_label["$open_terminal_action"]=${selected_paths_ref[0]}
   else
     for index in "${!selected_paths_ref[@]}"; do
-      action_labels+=("$open_terminal_action / ${selected_names_ref[$index]}")
-      action_paths+=("${selected_paths_ref[$index]}")
+      action_label="$open_terminal_action / ${selected_names_ref[$index]}"
+      action_labels+=("$action_label")
+      action_path_by_label["$action_label"]=${selected_paths_ref[$index]}
     done
   fi
 
@@ -774,21 +865,17 @@ manage_application_actions() {
       return "$status"
     fi
 
-    found=0
-    for index in "${!action_paths[@]}"; do
-      if [[ "$action" == "${action_labels[$index]}" ]]; then
-        open_terminal_window "${action_paths[$index]}" || true
-        found=1
-        break
-      fi
-    done
-    ((found)) || die "picker returned an unknown application action: $action"
+    selected_path=${action_path_by_label["$action"]-}
+    [[ -n "$selected_path" ]] || die "picker returned an unknown application action: $action"
+    open_terminal_window "$selected_path" || true
   done
 }
 
 manage_workspace_applications() {
-  local workspace=$1 workspace_name=$2 selection label display_label found index status selected_path
-  local -a labels=() menu_items=() selected_names=() selected_paths=()
+  local workspace=$1 workspace_name=$2 selection label index status selected_path
+  local -a application_names=() application_paths=() application_labels=()
+  local -a menu_items=() selected_names=() selected_paths=()
+  local -A application_index_by_label=()
 
   while :; do
     if [[ ! -e "$workspace" && ! -L "$workspace" ]]; then
@@ -800,9 +887,11 @@ manage_workspace_applications() {
       return 0
     fi
 
-    collect_linked_applications "$workspace" labels
+    collect_linked_applications \
+      "$workspace" application_names application_paths application_labels
     menu_items=("$open_workspace_action" "$open_vscode_action")
-    if [[ ${#labels[@]} -eq 0 ]]; then
+    application_index_by_label=()
+    if [[ ${#application_labels[@]} -eq 0 ]]; then
       if pick_menu selection menu_items "Applications / $workspace_name" "$empty_menu_hint"; then
         :
       else
@@ -811,8 +900,10 @@ manage_workspace_applications() {
         return "$status"
       fi
     else
-      for label in "${labels[@]}"; do
-        menu_items+=("$application_menu_prefix$label")
+      for index in "${!application_labels[@]}"; do
+        label="$application_menu_prefix${application_labels[$index]}"
+        menu_items+=("$label")
+        application_index_by_label["$label"]=$index
       done
       if pick_menu selection menu_items "Applications / $workspace_name" \
         "$application_menu_hint" multi 2; then
@@ -833,19 +924,12 @@ manage_workspace_applications() {
     selected_names=()
     selected_paths=()
     while IFS= read -r label; do
-      found=0
-      for index in "${!labels[@]}"; do
-        display_label="$application_menu_prefix${labels[$index]}"
-        if [[ "$label" == "$display_label" ]]; then
-          found=1
-          break
-        fi
-      done
-      ((found)) || die "picker returned an unknown application: $label"
-      selected_path="$workspace/${labels[$index]}"
+      index=${application_index_by_label["$label"]-}
+      [[ -n "$index" ]] || die "picker returned an unknown application: $label"
+      selected_path=${application_paths[$index]}
       [[ -L "$selected_path" && -d "$selected_path" ]] ||
         die "selected application disappeared: $selected_path"
-      selected_names+=("${labels[$index]}")
+      selected_names+=("${application_names[$index]}")
       selected_paths+=("$selected_path")
     done <<<"$selection"
 
@@ -859,13 +943,18 @@ manage_workspace_applications() {
 }
 
 manage_workspaces() {
-  local workspace_dir selection status name index found
+  local workspace_dir selection status name index
   local -a menu_items=() workspace_labels=() workspace_paths=()
+  local -A workspace_index_by_label=()
 
-  workspace_dir="$(to_absolute_path "${CODEV_WORKSPACES_PATH:-$HOME/WORKSPACES}")"
+  to_absolute_path "${CODEV_WORKSPACES_PATH:-$HOME/WORKSPACES}" workspace_dir
   while :; do
     collect_workspace_entries "$workspace_dir" workspace_labels workspace_paths
     menu_items=("$create_menu_label" "$refresh_menu_label" "${workspace_labels[@]}")
+    workspace_index_by_label=()
+    for index in "${!workspace_labels[@]}"; do
+      workspace_index_by_label["${workspace_labels[$index]}"]=$index
+    done
     if pick_menu selection menu_items 'Workspaces' "$workspace_menu_hint"; then
       :
     else
@@ -899,21 +988,15 @@ manage_workspaces() {
       fi
     fi
 
-    found=0
-    for index in "${!workspace_paths[@]}"; do
-      if [[ "$selection" == "${workspace_labels[$index]}" ]]; then
-        name=${workspace_paths[$index]##*/}
-        if manage_workspace_applications "${workspace_paths[$index]}" "$name"; then
-          :
-        else
-          status=$?
-          return "$status"
-        fi
-        found=1
-        break
-      fi
-    done
-    ((found)) || die "picker returned an unknown workspace: $selection"
+    index=${workspace_index_by_label["$selection"]-}
+    [[ -n "$index" ]] || die "picker returned an unknown workspace: $selection"
+    name=${workspace_paths[$index]##*/}
+    if manage_workspace_applications "${workspace_paths[$index]}" "$name"; then
+      :
+    else
+      status=$?
+      return "$status"
+    fi
   done
 }
 

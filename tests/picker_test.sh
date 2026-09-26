@@ -75,6 +75,12 @@ assert_equal "$picker_action" ignore 'q should be ignored unless --quit is enabl
 picker_quit_enabled=1
 picker_read_action 3<<<q
 assert_equal "$picker_action" quit 'q should quit when --quit is enabled'
+picker_terminal_size_dirty=1
+picker_read_action 3</dev/null
+assert_equal "$picker_action" ignore 'a resize-interrupted read should redraw instead of cancelling'
+picker_terminal_size_dirty=0
+picker_read_action 3</dev/null
+assert_equal "$picker_action" cancel 'end-of-input should still cancel the picker'
 
 picker_reset_state
 picker_set_default_hint
@@ -138,16 +144,31 @@ picker_cursor=0
 picker_offset=0
 stty() {
   [[ "${1-}" == size ]] || return 1
+  printf x >>"$TEST_ROOT/stty-size-calls"
   printf '10 20\n'
 }
 exec 3>"$TEST_ROOT/render"
 picker_draw_menu
 exec 3>&-
-unset -f stty
 line_feeds="$(tr -cd '\n' <"$TEST_ROOT/render" | wc -c | tr -d ' ')"
 assert_equal "$line_feeds" 9 'full-height rendering should not scroll the terminal'
 grep -Fq five "$TEST_ROOT/render" || fail 'last visible item was not rendered'
 ! grep -Fq six "$TEST_ROOT/render" || fail 'item below the viewport was rendered'
 grep -Fq '1 of 6' "$TEST_ROOT/render" || fail 'single-select footer is incorrect'
+assert_equal "$(wc -c <"$TEST_ROOT/stty-size-calls" | tr -d ' ')" 1 \
+  'the first draw should query the terminal size'
+
+exec 3>/dev/null
+picker_draw_menu
+exec 3>&-
+assert_equal "$(wc -c <"$TEST_ROOT/stty-size-calls" | tr -d ' ')" 1 \
+  'redrawing without a resize should reuse the terminal size'
+picker_terminal_size_dirty=1
+exec 3>/dev/null
+picker_draw_menu
+exec 3>&-
+assert_equal "$(wc -c <"$TEST_ROOT/stty-size-calls" | tr -d ' ')" 2 \
+  'a terminal resize should refresh the cached size'
+unset -f stty
 
 printf 'picker tests passed\n'
