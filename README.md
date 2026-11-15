@@ -138,10 +138,17 @@ jdev --help
 
 ### git merged
 
-List or clean merged branches.
+List or clean merged branches. The comparison target defaults to `HEAD`.
 
 ```sh
 git merged [branch]
 git merged --clean [branch]
+git merged -r [remote]          # Include remote branches; defaults to origin
+git merged main -r              # Compare local + origin branches with main
+git merged --clean -r [remote]
 ```
+
+`-r` / `--remote` uses cached remote refs; refresh them with
+`git fetch <remote> --prune`. Cleanup shows differences and asks for confirmation,
+skipping any group containing an unmerged branch.
 
