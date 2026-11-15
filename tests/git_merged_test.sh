@@ -145,7 +145,9 @@ git config user.name Test
 git config user.email test@example.com
 git commit --allow-empty -m base >/dev/null
 base_oid="$(git rev-parse HEAD)"
-git commit --allow-empty -m included >/dev/null
+GIT_AUTHOR_NAME='Remote Author' GIT_COMMITTER_NAME='Merge Bot' \
+  GIT_AUTHOR_DATE='2025-02-01T09:30:00+0530' GIT_COMMITTER_DATE='2025-02-02T15:04:00+0530' \
+  git commit --allow-empty -m included >/dev/null
 included_oid="$(git rev-parse HEAD)"
 git remote add origin "$TEST_ROOT/joint-origin.git"
 git remote add upstream "$TEST_ROOT/joint-upstream.git"
@@ -214,19 +216,22 @@ chmod +x "$TEST_ROOT/bin/git"
 hash -r
 
 query -r
-assert_has "$TEST_ROOT/report" 'Target: HEAD'
+assert_has "$TEST_ROOT/report" "Target: HEAD (${included_oid:0:6})"
 assert_has "$TEST_ROOT/report" 'remote: origin'
 assert_has "$TEST_ROOT/report" 'different (different: local-only=0 remote-only=1)'
-assert_has "$TEST_ROOT/report" 'alias-a (merged'
-assert_has "$TEST_ROOT/report" 'alias-b (merged'
+assert_has "$TEST_ROOT/report" "L: different (M, ${base_oid:0:6})"
+assert_has "$TEST_ROOT/report" "R: renamed (M, ${included_oid:0:6}, 2025-02-02 15:04 +0530, Remote Author)"
+assert_has "$TEST_ROOT/report" 'L: alias-a (M,'
+assert_has "$TEST_ROOT/report" 'L: alias-b (M,'
 assert_has "$TEST_ROOT/report" 'local only'
 assert_has "$TEST_ROOT/report" 'remote only'
 assert_has "$TEST_ROOT/report" 'unmerged member'
 assert_has "$TEST_ROOT/report" 'skip: comparison target'
 assert_has "$TEST_ROOT/report" 'checked out in worktree'
-assert_has "$TEST_ROOT/report" 'origin/slash/topic'
-assert_lacks "$TEST_ROOT/report" 'origin/HEAD'
-assert_lacks "$TEST_ROOT/report" 'upstream/upstream-only'
+assert_has "$TEST_ROOT/report" 'R: slash/topic (M,'
+assert_lacks "$TEST_ROOT/report" 'origin/'
+assert_lacks "$TEST_ROOT/report" 'R: HEAD ('
+assert_lacks "$TEST_ROOT/report" 'R: upstream-only ('
 assert_lacks "$TEST_ROOT/report" 'git fetch'
 assert_has "$TEST_ROOT/error" 'git fetch origin --prune'
 assert_lacks "$TEST_GIT_LOG" 'ls-remote'
@@ -241,8 +246,9 @@ assert_has "$TEST_ROOT/report" 'Target: origin/HEAD'
 assert_has "$TEST_ROOT/report" 'skip: comparison target'
 query --remote upstream
 assert_has "$TEST_ROOT/report" 'remote: upstream'
-assert_has "$TEST_ROOT/report" 'upstream/upstream-renamed'
-assert_lacks "$TEST_ROOT/report" 'origin/'
+assert_has "$TEST_ROOT/report" 'R: upstream-renamed (M,'
+assert_lacks "$TEST_ROOT/report" 'upstream/'
+assert_lacks "$TEST_ROOT/report" 'R: renamed ('
 for remote_name in missing main; do
   if query -r "$remote_name"; then fail 'unknown remote accepted'; fi
   assert_has "$TEST_ROOT/error" "remote '$remote_name' does not exist"
@@ -255,6 +261,7 @@ for group in main linked-joint skip-local skip-remote shared-mixed pending; do
   assert_lacks "$TEST_PICKER_INPUT" "$group"$'\t'
 done
 assert_has "$TEST_PICKER_INPUT" 'renamed'$'\t'
+assert_has "$TEST_PICKER_INPUT" "R: renamed (M, ${included_oid:0:6}, 2025-02-02 15:04 +0530, Remote Author)"
 assert_has "$TEST_PICKER_INPUT" 'shared'$'\t'
 assert_local same
 TEST_SELECTION= TEST_GROUPS= TEST_PICKER_STATUS=1 query -r --clean
@@ -343,8 +350,9 @@ for name in same different alias-a alias-b local-only slash/topic; do assert_no_
 for name in same renamed shared remote-only slash/topic; do assert_no_remote origin "$name"; done
 [[ "$(grep -Fc ':refs/heads/shared' "$TEST_GIT_LOG")" -eq 1 ]] || fail 'shared remote deleted more than once'
 assert_has "$TEST_ROOT/error" 'different (different: local-only=0 remote-only=1)'
-assert_has "$TEST_ROOT/error" 'alias-a (merged'
-assert_has "$TEST_ROOT/error" 'alias-b (merged'
+assert_has "$TEST_ROOT/error" 'L: alias-a (M,'
+assert_has "$TEST_ROOT/error" 'L: alias-b (M,'
+assert_has "$TEST_ROOT/error" "R: renamed (M, ${included_oid:0:6}, 2025-02-02 15:04 +0530, Remote Author)"
 for name in main linked-joint skip-local skip-remote shared-good shared-bad; do assert_local "$name"; done
 for name in main linked-joint skip-local skip-remote shared-mixed; do assert_remote origin "$name"; done
 
