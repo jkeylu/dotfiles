@@ -2,14 +2,16 @@
 
 picker_usage() {
   printf '%s\n' \
-    'Usage: picker [--multi] [--actions COUNT] [--quit]' \
+    'Usage: picker [--multi] [--actions COUNT] [--quit] [--ansi]' \
     '              [--prompt TEXT] [--hint TEXT]' \
     '' \
-    'Reads one nonempty item per line and prints the selected item(s).'
+    'Reads one nonempty item per line and prints the selected item(s).' \
+    '--ansi preserves ANSI SGR styling in item labels; other controls are sanitized.'
 }
 
 picker_sanitize_for_display() {
   local value=$1 output_name=${2-} result='' character code index
+  local allow_ansi=${3:-0} sgr_pattern=$'^\033\\[[0-9;]*m' sgr
 
   # Menu labels almost never contain control bytes. Keep that common path as
   # one Bash assignment; the character loop is disproportionately expensive
@@ -19,6 +21,12 @@ picker_sanitize_for_display() {
   else
     for ((index = 0; index < ${#value}; index++)); do
       character=${value:index:1}
+      if [[ "$allow_ansi" -eq 1 && "$character" == $'\033' && "${value:index}" =~ $sgr_pattern ]]; then
+        sgr=${BASH_REMATCH[0]}
+        result+=$sgr
+        index=$((index + ${#sgr} - 1))
+        continue
+      fi
       if [[ "$character" == $'\t' ]]; then
         result+='    '
         continue
@@ -69,6 +77,10 @@ picker_parse_args() {
     case "$1" in
       --multi)
         picker_multi=1
+        shift
+        ;;
+      --ansi)
+        picker_ansi=1
         shift
         ;;
       --actions)
@@ -129,7 +141,7 @@ picker_read_items() {
   for item in "${input_items[@]}"; do
     [[ -n "$item" ]] || continue
     picker_items+=("$item")
-    picker_sanitize_for_display "$item" display_item
+    picker_sanitize_for_display "$item" display_item "${picker_ansi:-0}"
     picker_display_items+=("$display_item")
   done
   [[ ${#picker_items[@]} -gt 0 ]]
@@ -236,12 +248,12 @@ picker_draw_menu() {
       if ((index == picker_cursor)); then
         printf '\033[7m> [%s] %s\033[0m\r\n' "$mark" "$label" >&3
       else
-        printf '  [%s] %s\r\n' "$mark" "$label" >&3
+        printf '  [%s] %s\033[0m\r\n' "$mark" "$label" >&3
       fi
     elif ((index == picker_cursor)); then
       printf '\033[7m> %s\033[0m\r\n' "$label" >&3
     else
-      printf '  %s\r\n' "$label" >&3
+      printf '  %s\033[0m\r\n' "$label" >&3
     fi
   done
 
@@ -369,6 +381,7 @@ picker_reset_state() {
   picker_hint=''
   picker_hint_set=0
   picker_multi=0
+  picker_ansi=0
   picker_action_count=0
   picker_quit_enabled=0
   picker_items=()

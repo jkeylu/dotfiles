@@ -15,6 +15,8 @@ cleanup() {
 trap cleanup EXIT
 
 export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
+# Test color settings independently of the runner's default NO_COLOR value.
+export NO_COLOR=
 
 git init --bare "$TEST_ROOT/remote.git" >/dev/null 2>&1
 git init -b main "$TEST_ROOT/work" >/dev/null 2>&1
@@ -41,6 +43,7 @@ cat > "$TEST_ROOT/bin/picker" <<'EOF'
 items="$(cat)"
 [[ -z "${TEST_PICKER_INPUT:-}" ]] || printf '%s\n' "$items" > "$TEST_PICKER_INPUT"
 [[ " $* " == *' --multi '* ]] || exit 97
+[[ "${TEST_REQUIRE_ANSI:-0}" -eq 0 || " $* " == *' --ansi '* ]] || exit 96
 [[ "${TEST_PICKER_STATUS:-0}" -eq 0 ]] || exit "$TEST_PICKER_STATUS"
 if [[ -n "${TEST_GROUPS:-}" ]]; then
   while IFS= read -r group; do
@@ -203,7 +206,7 @@ expect_clean_failure() {
 
 # Log all Git commands and simulate changes after confirmation but before push.
 REAL_GIT="$(command -v git)"
-export REAL_GIT TEST_GIT_LOG="$TEST_ROOT/git-log" TEST_PICKER_INPUT="$TEST_ROOT/picker-input"
+export REAL_GIT TEST_GIT_LOG="$TEST_ROOT/git-log" TEST_PICKER_INPUT="$TEST_ROOT/picker-input" TEST_REQUIRE_ANSI=1
 cat > "$TEST_ROOT/bin/git" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$TEST_GIT_LOG"
@@ -215,16 +218,21 @@ EOF
 chmod +x "$TEST_ROOT/bin/git"
 hash -r
 
-query -r
+TZ=UTC0 query -r
 assert_has "$TEST_ROOT/report" "Target: HEAD (${included_oid:0:6})"
 assert_has "$TEST_ROOT/report" 'remote: origin'
 assert_has "$TEST_ROOT/report" 'different (different: local-only=0 remote-only=1)'
 assert_has "$TEST_ROOT/report" "L: different (M, ${base_oid:0:6})"
-assert_has "$TEST_ROOT/report" "R: renamed (M, ${included_oid:0:6}, 2025-02-02 15:04 +0530, Remote Author)"
+assert_has "$TEST_ROOT/report" "R: renamed (M, ${included_oid:0:6}, 2025-02-02 17:34, Remote Author)"
 assert_has "$TEST_ROOT/report" 'L: alias-a (M,'
 assert_has "$TEST_ROOT/report" 'L: alias-b (M,'
-assert_has "$TEST_ROOT/report" 'local only'
-assert_has "$TEST_ROOT/report" 'remote only'
+assert_has "$TEST_ROOT/report" 'L-only'
+assert_has "$TEST_ROOT/report" 'R-only'
+assert_has "$TEST_ROOT/report" 'L: -'
+assert_has "$TEST_ROOT/report" 'R: -'
+assert_lacks "$TEST_ROOT/report" 'none'
+assert_lacks "$TEST_ROOT/report" '+0530'
+assert_lacks "$TEST_ROOT/report" $'\033'
 assert_has "$TEST_ROOT/report" 'unmerged member'
 assert_has "$TEST_ROOT/report" 'skip: comparison target'
 assert_has "$TEST_ROOT/report" 'checked out in worktree'
@@ -237,10 +245,16 @@ assert_has "$TEST_ROOT/error" 'git fetch origin --prune'
 assert_lacks "$TEST_GIT_LOG" 'ls-remote'
 assert_lacks "$TEST_GIT_LOG" 'fetch '
 
+git config color.ui always
 query main -r
 assert_has "$TEST_ROOT/report" 'Target: main'
-query -r origin main
+assert_has "$TEST_ROOT/report" $'L: \033[36mdifferent\033[39m'
+assert_has "$TEST_ROOT/report" $'R: \033[36mrenamed\033[39m'
+assert_has "$TEST_ROOT/report" $'\033[33m2025-02-02 17:34\033[39m'
+NO_COLOR=1 query -r origin main
 assert_has "$TEST_ROOT/report" 'Target: main'
+assert_lacks "$TEST_ROOT/report" $'\033'
+git config --unset color.ui
 query -r origin origin/HEAD
 assert_has "$TEST_ROOT/report" 'Target: origin/HEAD'
 assert_has "$TEST_ROOT/report" 'skip: comparison target'
@@ -257,17 +271,26 @@ if query -r origin main extra; then fail 'extra target accepted'; fi
 
 # The picker only offers fully merged, unprotected groups. Cancellation is safe.
 TEST_SELECTION= TEST_GROUPS= TEST_PICKER_STATUS=130 query --clean -r
+[[ ! -s "$TEST_ROOT/report" && ! -s "$TEST_ROOT/error" ]] || fail 'cleanup printed a query report before the picker'
 for group in main linked-joint skip-local skip-remote shared-mixed pending; do
   assert_lacks "$TEST_PICKER_INPUT" "$group"$'\t'
 done
 assert_has "$TEST_PICKER_INPUT" 'renamed'$'\t'
-assert_has "$TEST_PICKER_INPUT" "R: renamed (M, ${included_oid:0:6}, 2025-02-02 15:04 +0530, Remote Author)"
+assert_has "$TEST_PICKER_INPUT" "R: renamed (M, ${included_oid:0:6}, 2025-02-02 17:34, Remote Author)"
+assert_has "$TEST_PICKER_INPUT" 'L: -'
+assert_has "$TEST_PICKER_INPUT" 'R: -'
 assert_has "$TEST_PICKER_INPUT" 'shared'$'\t'
 assert_local same
 TEST_SELECTION= TEST_GROUPS= TEST_PICKER_STATUS=1 query -r --clean
 TEST_SELECTION= TEST_GROUPS= query -r --clean
+git config color.ui always
 TEST_GROUPS=same TEST_SELECTION= query -r --clean < /dev/null
 TEST_GROUPS=same TEST_SELECTION= bash "$SCRIPT" --clean -r <<< n > "$TEST_ROOT/output" 2> "$TEST_ROOT/error"
+assert_has "$TEST_PICKER_INPUT" $'R: \033[36msame\033[39m'
+assert_has "$TEST_ROOT/error" $'L: \033[36msame\033[39m'
+assert_lacks "$TEST_ROOT/error" 'Target:'
+assert_lacks "$TEST_ROOT/error" 'Remote-tracking data may be outdated.'
+git config --unset color.ui
 assert_local same
 assert_remote origin same
 if TEST_SELECTION=invalid TEST_GROUPS= query --clean -r; then fail 'invalid group accepted'; fi
@@ -352,7 +375,7 @@ for name in same renamed shared remote-only slash/topic; do assert_no_remote ori
 assert_has "$TEST_ROOT/error" 'different (different: local-only=0 remote-only=1)'
 assert_has "$TEST_ROOT/error" 'L: alias-a (M,'
 assert_has "$TEST_ROOT/error" 'L: alias-b (M,'
-assert_has "$TEST_ROOT/error" "R: renamed (M, ${included_oid:0:6}, 2025-02-02 15:04 +0530, Remote Author)"
+assert_has "$TEST_ROOT/error" "R: renamed (M, ${included_oid:0:6}, 2025-02-02 17:34, Remote Author)"
 for name in main linked-joint skip-local skip-remote shared-good shared-bad; do assert_local "$name"; done
 for name in main linked-joint skip-local skip-remote shared-mixed; do assert_remote origin "$name"; done
 

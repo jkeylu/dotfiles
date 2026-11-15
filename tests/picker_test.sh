@@ -4,8 +4,14 @@ set -euo pipefail
 
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 PICKER="$REPO_DIR/scripts/tools/picker"
-TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/picker-test.XXXXXX")"
-trap 'rm -rf -- "$TEST_ROOT"' EXIT
+TEST_TMP_DIR="$(cd -- "${TMPDIR:-/tmp}" && pwd -P)"
+TEST_ROOT="$(mktemp -d "$TEST_TMP_DIR/picker-test.XXXXXX")"
+cleanup() {
+  [[ "$TEST_ROOT" == "$TEST_TMP_DIR"/picker-test.* && -d "$TEST_ROOT" ]] || return 0
+  [[ "$(cd -- "$TEST_ROOT" && pwd -P)" == "$TEST_ROOT" ]] || return 1
+  rm -rf -- "$TEST_ROOT"
+}
+trap cleanup EXIT
 
 fail() {
   printf 'picker test failed: %s\n' "$1" >&2
@@ -24,6 +30,21 @@ source "$PICKER"
 rendered="$(picker_sanitize_for_display $'[Action] New workspace\\path\t中文\033')"
 assert_equal "$rendered" $'[Action] New workspace\\path    中文?' \
   'display sanitizer changed ordinary text or leaked control characters'
+
+rendered="$(picker_sanitize_for_display $'\033[36mfeature\033[39m')"
+assert_equal "$rendered" '?[36mfeature?[39m' 'ANSI styling should remain opt-in'
+rendered="$(picker_sanitize_for_display $'\033[36mfeature\033[39m\t\033[2J\033]0;title\007' '' 1)"
+assert_equal "$rendered" $'\033[36mfeature\033[39m    ?[2J?]0;title?' \
+  '--ansi should preserve styling without allowing cursor or terminal-title controls'
+picker_reset_state
+picker_parse_args --ansi
+styled_item=$'L: \033[36mfeature\033[39m\t\033[33m2025-02-02 17:34\033[39m'
+picker_read_items <<< "$styled_item"
+assert_equal "${picker_display_items[0]}" "${styled_item//$'\t'/    }" \
+  'colored item labels should retain styling when displayed'
+picker_cursor=0
+assert_equal "$(picker_emit_selection)" "$styled_item" \
+  'colored selections should return the exact original item'
 
 assert_equal "$(picker_decode_escape_sequence 0 '' 0 '')" cancel \
   'standalone Esc should cancel'
@@ -137,7 +158,7 @@ fi
 # scrolling it out of the alternate screen.
 picker_reset_state
 picker_items=(one two three four five six)
-picker_display_items=(one two three four five six)
+picker_display_items=($'L: \033[36mone\033[39m' $'\033[33mtwo' three four five six)
 picker_display_prompt=Choose
 picker_display_hint=Help
 picker_cursor=0
@@ -155,6 +176,10 @@ assert_equal "$line_feeds" 9 'full-height rendering should not scroll the termin
 grep -Fq five "$TEST_ROOT/render" || fail 'last visible item was not rendered'
 ! grep -Fq six "$TEST_ROOT/render" || fail 'item below the viewport was rendered'
 grep -Fq '1 of 6' "$TEST_ROOT/render" || fail 'single-select footer is incorrect'
+grep -Fq $'\033[7m> L: \033[36mone\033[39m\033[0m' "$TEST_ROOT/render" || \
+  fail 'foreground colors should preserve the active-row reverse highlight'
+grep -Fq $'\033[33mtwo\033[0m\r\n' "$TEST_ROOT/render" || \
+  fail 'styles should not leak from an unselected row to the next row'
 assert_equal "$(wc -c <"$TEST_ROOT/stty-size-calls" | tr -d ' ')" 1 \
   'the first draw should query the terminal size'
 

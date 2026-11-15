@@ -103,7 +103,8 @@ compare_remote_branches() {
   local configured_remotes remote_found=0 candidate ref oid symref upstream_remote upstream_ref
   local refs key name target_oid worktrees status merged_state local_details remote_details relation
   local all_merged protected checked_out reason counts left right details label selected found index answer
-  local selection select_status current_oid metadata
+  local selection select_status current_oid commit_time author color_tty=false
+  local branch_color= time_color= color_reset=
   local target_ref=$target_ref
   local -a group_keys=() choices=() choice_keys=() selected_groups=()
   local -A snapshot_oids=() group_members=() group_remote=() group_reports=() selected_keys=()
@@ -117,22 +118,33 @@ compare_remote_branches() {
     printf "Error: remote '%s' does not exist.\n" "$comparison_remote" >&2
     return 1
   fi
-  printf 'Remote-tracking data may be outdated. Run git fetch %q --prune to update it.\n' "$comparison_remote" >&2
+  if [[ "$clean" -eq 0 ]]; then
+    printf 'Remote-tracking data may be outdated. Run git fetch %q --prune to update it.\n' "$comparison_remote" >&2
+    [[ ! -t 1 ]] || color_tty=true
+  else
+    [[ ! -t 2 ]] || color_tty=true
+  fi
+  if [[ -z "${NO_COLOR:-}" && "$(git config --get-colorbool color.ui "$color_tty")" == true ]]; then
+    branch_color=$'\033[36m'
+    time_color=$'\033[33m'
+    # Reset only the foreground so the picker's active-row reverse stays on.
+    color_reset=$'\033[39m'
+  fi
   target_oid="$(git rev-parse --verify "${branch}^{commit}")" || return 1
   if [[ -n "$target_ref" ]] && symref="$(git symbolic-ref --quiet "$target_ref")"; then
     target_ref=$symref
   fi
   worktrees="$(git worktree list --porcelain)" || return 1
 
-  refs="$(git for-each-ref --format='%(if)%(symref)%(then)%(else)%(refname)%09%(objectname)%09%(committerdate:format:%Y-%m-%d %H:%M %z), %(authorname)%(end)' "refs/remotes/$comparison_remote/")" || return 1
-  while IFS=$'\t' read -r ref oid metadata; do
+  refs="$(TZ=UTC-8 git for-each-ref --format='%(if)%(symref)%(then)%(else)%(refname)%09%(objectname)%09%(committerdate:format-local:%Y-%m-%d %H:%M)%09%(authorname)%(end)' "refs/remotes/$comparison_remote/")" || return 1
+  while IFS=$'\t' read -r ref oid commit_time author; do
     [[ -n "$ref" ]] || continue
     key="${ref#refs/remotes/$comparison_remote/}"
     group_keys+=("$key")
     group_remote[$key]=$ref
     group_members[$key]=$ref
     snapshot_oids[$ref]=$oid
-    remote_metadata[$ref]="${metadata//$'\t'/ }"
+    remote_metadata[$ref]="$time_color$commit_time$color_reset, ${author//$'\t'/ }"
   done <<< "$refs"
 
   refs="$(git for-each-ref --format='%(refname)%09%(objectname)%09%(upstream:remotename)%09%(upstream:remoteref)' refs/heads/)" || return 1
@@ -151,14 +163,10 @@ compare_remote_branches() {
     snapshot_oids[$ref]=$oid
   done <<< "$refs"
 
-  # Query output stays on stdout; the clean report belongs with the prompts.
-  if [[ "$clean" -eq 1 ]]; then
-    exec 3>&2
-  else
-    exec 3>&1
+  if [[ "$clean" -eq 0 ]]; then
+    printf 'Target: %s (%s); remote: %s\n' "$branch" "${target_oid:0:6}" "$comparison_remote"
+    printf 'GROUP\tLOCAL\tREMOTE\tRELATION\tCLEANUP\n'
   fi
-  printf 'Target: %s (%s); remote: %s\n' "$branch" "${target_oid:0:6}" "$comparison_remote" >&3
-  printf 'GROUP\tLOCAL\tREMOTE\tRELATION\tCLEANUP\n' >&3
   for key in "${group_keys[@]}"; do
     local_details= remote_details= relation= details=
     all_merged=1 protected=0 checked_out=0
@@ -174,7 +182,7 @@ compare_remote_branches() {
       [[ "$ref" != "$target_ref" ]] || protected=1
       if [[ "$ref" == refs/heads/* ]]; then
         name="${ref#refs/heads/}"
-        local_details+="${local_details:+; }L: $name ($merged_state, ${oid:0:6})"
+        local_details+="${local_details:+; }L: $branch_color$name$color_reset ($merged_state, ${oid:0:6})"
         if [[ $'\n'"$worktrees"$'\n' == *$'\n'"branch $ref"$'\n'* ]]; then
           checked_out=1
         fi
@@ -185,13 +193,13 @@ compare_remote_branches() {
           details+="${details:+; }$name: local-only=$left remote-only=$right"
         fi
       else
-        remote_details="R: $key ($merged_state, ${oid:0:6}, ${remote_metadata[$ref]})"
+        remote_details="R: $branch_color$key$color_reset ($merged_state, ${oid:0:6}, ${remote_metadata[$ref]})"
       fi
     done <<< "${group_members[$key]}"
     if [[ -z "$local_details" ]]; then
-      relation='remote only'
+      relation=R-only
     elif [[ -z "$remote_details" ]]; then
-      relation='local only'
+      relation=L-only
     elif [[ -n "$details" ]]; then
       relation="different ($details)"
     else
@@ -201,7 +209,7 @@ compare_remote_branches() {
     [[ "$protected" -eq 0 ]] || reason='comparison target'
     [[ "$checked_out" -eq 0 ]] || reason+="${reason:+; }checked out in worktree"
     [[ "$all_merged" -eq 1 ]] || reason+="${reason:+; }unmerged member"
-    printf -v label '%s\t%s | %s | %s' "$key" "${local_details:-L: none}" "${remote_details:-R: none}" "$relation"
+    printf -v label '%s\t%s | %s | %s' "$key" "${local_details:-L: -}" "${remote_details:-R: -}" "$relation"
     group_reports[$key]=$label
     if [[ -z "$reason" ]]; then
       choices+=("$label")
@@ -210,15 +218,16 @@ compare_remote_branches() {
     else
       reason="skip: $reason"
     fi
-    printf '%s\t%s\t%s\t%s\t%s\n' "$key" "${local_details:-L: none}" "${remote_details:-R: none}" "$relation" "$reason" >&3
+    if [[ "$clean" -eq 0 ]]; then
+      printf '%s\t%s\t%s\t%s\t%s\n' "$key" "${local_details:-L: -}" "${remote_details:-R: -}" "$relation" "$reason"
+    fi
   done
-  exec 3>&-
   [[ "$clean" -eq 1 ]] || return 0
   if [[ "${#choices[@]}" -eq 0 ]]; then
     printf 'No merged branch groups eligible for cleanup.\n' >&2
     return 0
   fi
-  selection="$(printf '%s\n' "${choices[@]}" | picker --multi --prompt 'Merged branch groups')"
+  selection="$(printf '%s\n' "${choices[@]}" | picker --ansi --multi --prompt "Merged branch groups ($comparison_remote -> $branch)")"
   select_status=$?
   case "$select_status" in
     1|130) return 0 ;;
@@ -393,7 +402,7 @@ for i in "${!selected_branches[@]}"; do
   if [[ -n "${remote_oids[$i]}" ]]; then
     printf '  remote: %s/%s\n' "${remotes[$i]}" "${remote_refs[$i]#refs/heads/}" >&2
   else
-    printf '  remote: none\n' >&2
+    printf '  remote: -\n' >&2
   fi
 done
 printf 'Confirm deletion [y/N]: ' >&2
